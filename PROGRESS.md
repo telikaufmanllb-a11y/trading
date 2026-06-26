@@ -5,23 +5,21 @@
 
 ---
 
-## NEXT: Stage 1 (cont.) — run the cluster eyeball scan; then PriceSource iface
+## NEXT: Stage 1 (cont.) — PriceSource interface; then Stage 2 opportunistic filter
 
-Cross-issuer enumeration now works (daily master index → Form 4 `.txt` → XML → parsed `Form4`),
-validated live (916 Form 4s on 2026-06-25). Next highest-value:
+Cluster eyeball tooling is built, tested, and run on real data; it surfaced a key finding
+(D-0013: code-P clusters include coordinated offerings, not just opportunistic buys). Next:
 
-1. **Run the bounded cluster eyeball.** Write an inspection script (`reports/`-oriented, not on
-   the backtest path) that scans a small window of daily indices, fetches each Form 4, keeps only
-   open-market purchases (code `P`/`A`), groups by issuer, and surfaces issuers with ≥3 distinct
-   insider CIKs buying within ~15 days. Disk cache makes re-runs free; be polite on the first run
-   (rate-limited; a day has ~900 Form 4s). Manually inspect a few clusters vs. the literature
-   (opportunistic, small/mid-cap skew) before automating the detector in Stage 2.
-2. **`PriceSource` interface (swappable, delisting-aware).** Define the abstract contract
+1. **`PriceSource` interface (swappable, delisting-aware).** Define the abstract contract
    (`prices(ticker, start, end) -> DataFrame`, point-in-time, delisting-marked) so the backtest is
    provider-agnostic. Pick the concrete delisting-aware provider per D-0010. yfinance only in
-   fenced eyeball scripts, never on the backtest path.
+   fenced eyeball scripts, never on the backtest path. (Fully offline/testable — good next step.)
+2. **(Stage 2 seed) Opportunistic-vs-coordinated classification.** Per D-0013, before any signal
+   is tradable we must exclude coordinated/uniform-price offerings. Prototype the heuristics on
+   the FCBM / FMBM / ENR / TUSK clusters already cached: near-uniform price across insiders, same
+   filing date en masse, price ≈ a stated offering price, footnote/plan flags.
 
-Do NOT build the cluster detector or backtest yet. Stage 1 is "data + eyeball" first.
+Do NOT build the backtest yet. Finish Stage 1 (prices + universe) before Stage 2/3.
 
 ---
 
@@ -52,6 +50,27 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 1d (cluster eyeball tooling + first real-data finding)
+NEXT: Define the delisting-aware `PriceSource` interface; prototype the opportunistic-vs-
+     coordinated filter on the cached clusters (see top of file).
+DID: Built `scripts/eyeball_clusters.py` — an inspection tool (NOT the Stage 2 detector, NOT on
+     the backtest path) with a pure, offline-tested `find_clusters()` that groups open-market
+     purchases by issuer using FILING-DATE windows (HARD RULE 1). 5 new unit tests (distinct-
+     insider counting, window boundaries, issuer separation, sort order). Ran a bounded, polite
+     live scan (cap 800 filings) → surfaced 4 candidate clusters, incl. two community banks
+     (FCBM, FMBM) — matching the literature's small-cap/bank skew.
+KEY FINDING: FCBM showed 15 insiders — implausibly high (HARD RULE 6), so I eyeballed it: all 15
+     bought at a UNIFORM $12.50 on the SAME day = a coordinated fixed-price offering, not
+     independent opportunistic buys. SEC code P means "open market OR private purchase," so code-P
+     alone over-counts clusters. Logged as D-0013; Stage 2 must build an opportunistic filter that
+     excludes coordinated offerings BEFORE the signal is treated as tradable.
+RESULTS: 33/33 tests green. Live scan: 92 P-buy records from 800 filings → 4 raw candidate
+     clusters (pre-opportunistic-filter, so an over-count by design). N/A on returns.
+RED FLAGS / REVIEW NEEDED: None unresolved — the implausible 15-insider cluster was investigated
+     and explained (offering). The finding tightens Stage 2, it does not indicate a bug.
+RULE CHECK: look-ahead [ok — clustering keyed on filing date only] | survivorship [ok — no price
+     DB yet] | costs modeled [n/a — no backtest yet]
 
 ## 2026-06-26 — Stage 1c (cross-issuer enumeration via daily index)
 NEXT: Run the bounded cluster eyeball scan (daily indices → P-code buys → group by issuer → ≥3

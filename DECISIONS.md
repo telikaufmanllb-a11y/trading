@@ -92,3 +92,20 @@ Lesson re-affirmed: eyeball real data; a green test against a wrong fixture prov
 `acceptance_datetime_from_submission_header` reads `<ACCEPTANCE-DATETIME>` as the public-
 disclosure timestamp — the correct filing-date source (HARD RULE 1). Validated end-to-end against
 a real 2026-06-25 filing (916 Form 4s enumerated that day).
+
+### D-0013 · 2026-06-26 · Code "P" ≠ pure open-market; opportunistic filter must exclude coordinated offerings
+**Reason (Stage 1 eyeball finding — the whole point of "build intuition first"):** The eyeball
+tool flagged First Carolina Financial (FCBM) with 15 insiders buying on 2026-06-22 — implausibly
+high (HARD RULE 6), so I inspected it. All 15 (CEO, CFO, directors) bought at a *uniform $12.50*
+on the *same day*. That is a coordinated capital event (fixed-price offering / private placement),
+NOT 15 people independently judging the stock cheap. SEC transaction code **P is defined as "open
+market OR private purchase"**, so code-P alone admits directed offerings — the *opposite* of the
+opportunistic, independent cluster-buy the hypothesis targets ("multiple insiders *independently*
+making open-market purchases").
+**Consequence for Stage 2:** the opportunistic-vs-routine classifier must DOWN-WEIGHT or EXCLUDE
+clusters that look coordinated — heuristics to test: near-uniform price across insiders, same/near
+filing date en masse, price at/near a stated offering price, 10b5-1 plan flags, and footnotes
+indicating a subscription/rights/placement. Counting raw code-P insiders (as this eyeball tool
+does) will badly over-count clusters; that's acceptable for *inspection* but must NOT define the
+tradable signal. Logged so Stage 2 builds the filter in from the start rather than discovering it
+in a suspiciously-good backtest.
