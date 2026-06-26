@@ -109,3 +109,13 @@ indicating a subscription/rights/placement. Counting raw code-P insiders (as thi
 does) will badly over-count clusters; that's acceptable for *inspection* but must NOT define the
 tradable signal. Logged so Stage 2 builds the filter in from the start rather than discovering it
 in a suspiciously-good backtest.
+
+### D-0014 · 2026-06-26 · PriceSource interface with delisting as a first-class concept
+**Reason:** HARD RULE 2 + architecture goal. The backtest depends only on the abstract
+`PriceSource` (swappable provider, D-0010), and delisting is modeled explicitly via `DelistingInfo`
+rather than as missing data. The `holding_period_return` primitive runs a delisted name to its
+last bar and compounds the delisting return; an UNKNOWN delisting return defaults to -100% (total
+loss), never silently to a survivor's outcome. This makes survivorship safety a property of the
+data contract, not something the backtest must remember. `InMemoryPriceSource` exercises the
+contract offline; 8 tests pin the delisting math (wipeout, unknown→conservative, buyout residual,
+delisting-after-exit ignored). yfinance is intentionally NOT adapted here (survivor-biased).

@@ -5,21 +5,24 @@
 
 ---
 
-## NEXT: Stage 1 (cont.) — PriceSource interface; then Stage 2 opportunistic filter
+## NEXT: prototype the opportunistic filter (offline); price-VENDOR decision needs a human
 
-Cluster eyeball tooling is built, tested, and run on real data; it surfaced a key finding
-(D-0013: code-P clusters include coordinated offerings, not just opportunistic buys). Next:
+`PriceSource` interface + delisting-aware return primitive are done & tested. The remaining
+Stage-1 data piece — a *concrete* delisting-aware price provider — needs a human decision (see
+REVIEW NEEDED below), so the best autonomous next step is offline work on the signal quality:
 
-1. **`PriceSource` interface (swappable, delisting-aware).** Define the abstract contract
-   (`prices(ticker, start, end) -> DataFrame`, point-in-time, delisting-marked) so the backtest is
-   provider-agnostic. Pick the concrete delisting-aware provider per D-0010. yfinance only in
-   fenced eyeball scripts, never on the backtest path. (Fully offline/testable — good next step.)
-2. **(Stage 2 seed) Opportunistic-vs-coordinated classification.** Per D-0013, before any signal
-   is tradable we must exclude coordinated/uniform-price offerings. Prototype the heuristics on
-   the FCBM / FMBM / ENR / TUSK clusters already cached: near-uniform price across insiders, same
-   filing date en masse, price ≈ a stated offering price, footnote/plan flags.
+1. **(Stage 2 seed) Opportunistic-vs-coordinated classifier.** Per D-0013, prototype heuristics
+   that flag coordinated offerings (near-uniform price across insiders, same filing date en masse,
+   price ≈ a stated offering price, plan/footnote flags) using the already-cached FCBM/FMBM/ENR/
+   TUSK clusters. Build as a pure, tested function over `Form4`/purchase records.
+2. **Then:** point-in-time universe scaffold (delisting-aware) once the provider is chosen.
 
-Do NOT build the backtest yet. Finish Stage 1 (prices + universe) before Stage 2/3.
+⚠️ **REVIEW NEEDED (human decision):** A truly delisting-aware price source generally requires a
+paid/licensed vendor (CRSP / Norgate / Sharadar) or a non-trivial survivorship-free build from
+SEC Form 25 delistings + a corporate-actions feed. This has cost/licensing implications I should
+NOT decide autonomously. The `PriceSource` interface is ready to accept whichever is chosen.
+
+Do NOT build the backtest yet. Finish Stage 1 (concrete prices + universe) before Stage 2/3.
 
 ---
 
@@ -50,6 +53,21 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 1e (delisting-aware PriceSource interface)
+NEXT: Prototype the opportunistic-vs-coordinated filter offline on cached clusters; price-vendor
+     choice flagged for human (see top of file).
+DID: Added `data/prices.py` — abstract `PriceSource` (swappable provider per D-0010), first-class
+     `DelistingInfo`, canonical price schema + `validate_price_frame`, `InMemoryPriceSource` for
+     tests, and the survivorship-safe `holding_period_return` (filing-date entry at next bar;
+     delisting return compounded; UNKNOWN delisting return → conservative -100%, never a silent
+     survivor). 8 new tests pin the delisting math. Logged D-0014.
+RESULTS: 42/42 tests green. N/A on returns (no backtest yet).
+RED FLAGS / REVIEW NEEDED: Choosing the CONCRETE delisting-aware price vendor is a human decision
+     (cost/licensing) — flagged at top of file. The interface is ready to accept any provider.
+RULE CHECK: look-ahead [ok — entry uses first bar on/after entry date] | survivorship [ok —
+     delisting modeled first-class; unknown delisting defaults to total loss] | costs modeled
+     [n/a — no backtest yet]
 
 ## 2026-06-26 — Stage 1d (cluster eyeball tooling + first real-data finding)
 NEXT: Define the delisting-aware `PriceSource` interface; prototype the opportunistic-vs-
