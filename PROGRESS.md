@@ -5,17 +5,19 @@
 
 ---
 
-## NEXT: prototype the opportunistic filter (offline); price-VENDOR decision needs a human
+## NEXT: quantify the coordinated fraction (fuller scan); price-VENDOR decision needs a human
 
-`PriceSource` interface + delisting-aware return primitive are done & tested. The remaining
-Stage-1 data piece — a *concrete* delisting-aware price provider — needs a human decision (see
-REVIEW NEEDED below), so the best autonomous next step is offline work on the signal quality:
+Opportunistic classifier + joint-owner fix are done & tested. FINDING-1 (DECISIONS.md): in a tiny
+sample, genuine opportunistic clusters were ~0 — coordinated events and joint-filer artifacts
+dominate. Next autonomous steps (offline / light-network, cached):
 
-1. **(Stage 2 seed) Opportunistic-vs-coordinated classifier.** Per D-0013, prototype heuristics
-   that flag coordinated offerings (near-uniform price across insiders, same filing date en masse,
-   price ≈ a stated offering price, plan/footnote flags) using the already-cached FCBM/FMBM/ENR/
-   TUSK clusters. Build as a pure, tested function over `Form4`/purchase records.
-2. **Then:** point-in-time universe scaffold (delisting-aware) once the provider is chosen.
+1. **Quantify, don't eyeball.** Run a fuller cached/polite scan (e.g. a full trading week, no cap)
+   and measure: how many raw ≥3 clusters, how many survive the joint-owner collapse, how many
+   survive the opportunistic filter. This base rate decides whether the signal is even viable
+   before any backtest. Persist the surviving genuine clusters for later use.
+2. **Add an opportunistic flag to the cluster output** so the eyeball tool reports coordinated vs.
+   genuine, and wire `assess_coordination` into the cluster summary.
+3. **Then:** point-in-time universe scaffold (delisting-aware) once the provider is chosen.
 
 ⚠️ **REVIEW NEEDED (human decision):** A truly delisting-aware price source generally requires a
 paid/licensed vendor (CRSP / Norgate / Sharadar) or a non-trivial survivorship-free build from
@@ -53,6 +55,26 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 2a (opportunistic classifier + joint-owner over-count fix)
+NEXT: Quantify the coordinated/genuine cluster fractions over a fuller scan; wire the
+     opportunistic flag into the eyeball output (see top of file).
+DID: Built `features/opportunistic.assess_coordination` (flags coordinated offerings: near-uniform
+     price AND time-concentrated; provisional thresholds w/ economic rationale; 6 unit tests).
+     Cross-checking it on real data EXPOSED a real over-count bug: the eyeball tool counted each
+     joint owner of a single Form 4 as a separate insider — Energizer's one filing had 6 joint
+     affiliated owners → phantom 6-insider cluster. Fixed (one filing → one record keyed by sorted
+     owner-CIK set; `purchase_record_from_form4` + 3 tests). Re-ran the 800-filing sample:
+     candidate clusters 4→2.
+KEY FINDINGS (DECISIONS D-0015/D-0016/FINDING-1): both surviving clusters (FCBM offering @ uniform
+     $12.50; FMBM 8 directors @ uniform $36.10) are COORDINATED, not opportunistic → ~0 genuine
+     clusters in the sample. Two distinct inflation mechanisms identified: coordinated events and
+     joint/affiliated filers. The opportunistic filter is load-bearing, not cosmetic.
+RESULTS: 51/51 tests green. Sample base-rate intuition only (n=800 filings, 1 day) — not measured.
+RED FLAGS / REVIEW NEEDED: (carried) concrete price-vendor choice is a human decision. No new bugs
+     open — the joint-owner over-count was found AND fixed this cycle.
+RULE CHECK: look-ahead [ok — filing-date windows; classifier uses only in-filing data] |
+     survivorship [ok — no price DB yet] | costs modeled [n/a — no backtest yet]
 
 ## 2026-06-26 — Stage 1e (delisting-aware PriceSource interface)
 NEXT: Prototype the opportunistic-vs-coordinated filter offline on cached clusters; price-vendor

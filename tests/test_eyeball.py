@@ -2,7 +2,57 @@
 
 from datetime import date
 
-from scripts.eyeball_clusters import PurchaseRecord, find_clusters
+from data.form4 import Form4, Form4Transaction, ReportingOwner
+from scripts.eyeball_clusters import (
+    PurchaseRecord,
+    find_clusters,
+    owner_group_key,
+    purchase_record_from_form4,
+)
+
+
+def _owner(cik):
+    return ReportingOwner(cik=cik, name=f"Owner {cik}", is_director=True, is_officer=False,
+                          is_ten_percent_owner=True, is_other=False)
+
+
+def _p_buy():
+    return Form4Transaction(security_title="Common Stock", transaction_date=date(2026, 6, 22),
+                            code="P", shares=1000, price_per_share=12.5, acquired_disposed="A")
+
+
+def test_joint_owners_on_one_filing_count_as_one_insider():
+    # The Energizer trap: one filing, six joint affiliated owners = ONE economic decision-maker.
+    f = Form4(
+        issuer_cik="1632790", issuer_name="ENERGIZER HOLDINGS", issuer_ticker="ENR",
+        period_of_report=date(2026, 6, 22),
+        owners=[_owner(c) for c in ["1788233", "1788376", "1788225", "1788232"]],
+        transactions=[_p_buy()],
+        filing_date=date(2026, 6, 22),
+    )
+    rec = purchase_record_from_form4(f, fallback_cik="1632790", fallback_name="ENR")
+    assert rec is not None
+    # The insider key collapses all joint owners into one stable, sorted key.
+    assert rec.insider_cik == "1788225+1788232+1788233+1788376"
+    # So a single joint filing can never by itself form a >=3-insider cluster.
+    assert find_clusters([rec], min_insiders=3, window_days=15) == []
+
+
+def test_filing_without_open_market_purchase_yields_no_record():
+    f = Form4(
+        issuer_cik="1", issuer_name="X", issuer_ticker="X", period_of_report=date(2026, 1, 1),
+        owners=[_owner("9")],
+        transactions=[Form4Transaction("Common", date(2026, 1, 1), "S", 1, 1.0, "D")],
+        filing_date=date(2026, 1, 1),
+    )
+    assert purchase_record_from_form4(f, fallback_cik="1", fallback_name="X") is None
+
+
+def test_owner_group_key_none_when_no_ciks():
+    f = Form4(issuer_cik="1", issuer_name="X", issuer_ticker="X", period_of_report=None,
+              owners=[ReportingOwner(None, "n", False, False, False, False)],
+              transactions=[_p_buy()], filing_date=date(2026, 1, 1))
+    assert owner_group_key(f) is None
 
 
 def _rec(issuer, insider, d, ticker="T"):

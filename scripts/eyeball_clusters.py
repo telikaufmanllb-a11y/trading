@@ -92,11 +92,42 @@ def find_clusters(
 
 # --- live scan (inspection only) ------------------------------------------------------------
 
+def owner_group_key(form4) -> Optional[str]:
+    """Stable key identifying the (possibly joint) reporting person behind ONE filing.
+
+    A single Form 4 can name several joint reporting owners — e.g. an affiliated fund group
+    (Energizer 2026-06-22: one filing, six joint owners controlled by one person). They are ONE
+    economic decision-maker, so we key by the sorted set of their CIKs and count them as a single
+    insider, NOT one per owner. Returns None if no owner CIK is present.
+    """
+    ciks = sorted(o.cik for o in (form4.owners or []) if o.cik)
+    return "+".join(ciks) if ciks else None
+
+
+def purchase_record_from_form4(form4, *, fallback_cik: str, fallback_name: str) -> Optional[PurchaseRecord]:
+    """Reduce one Form 4 to a single PurchaseRecord iff it has an open-market purchase.
+
+    One filing → at most one record (one insider/decision-maker), collapsing joint owners.
+    """
+    if not form4.open_market_purchases() or form4.filing_date is None:
+        return None
+    key = owner_group_key(form4)
+    if key is None:
+        return None
+    return PurchaseRecord(
+        issuer_cik=form4.issuer_cik or fallback_cik,
+        issuer_name=form4.issuer_name or fallback_name,
+        ticker=form4.issuer_ticker,
+        insider_cik=key,
+        filing_date=form4.filing_date,
+    )
+
+
 def collect_purchase_records(
     client, days: list[date], *, max_filings: Optional[int] = None, verbose: bool = True
 ) -> list[PurchaseRecord]:
-    """Walk daily Form 4 indices, parse each filing, and emit one record per insider per issuer
-    that made an open-market purchase (code P / acquired). Rate-limited + disk-cached by `client`.
+    """Walk daily Form 4 indices, parse each filing, and emit ONE record per filing that made an
+    open-market purchase (code P / acquired). Rate-limited + disk-cached by `client`.
     """
     from data.form4 import (
         acceptance_datetime_from_submission_header,
@@ -128,20 +159,9 @@ def collect_purchase_records(
             acc = acceptance_datetime_from_submission_header(txt)
             filing_date = acc.date() if acc else e.date_filed
             f = parse_form4_xml(xml, filing_date=filing_date, accepted_at=acc)
-            if not f.open_market_purchases() or filing_date is None:
-                continue
-            for owner in f.owners or []:
-                if owner.cik is None:
-                    continue
-                records.append(
-                    PurchaseRecord(
-                        issuer_cik=f.issuer_cik or e.cik,
-                        issuer_name=f.issuer_name or e.company,
-                        ticker=f.issuer_ticker,
-                        insider_cik=owner.cik,
-                        filing_date=filing_date,
-                    )
-                )
+            rec = purchase_record_from_form4(f, fallback_cik=e.cik, fallback_name=e.company)
+            if rec is not None:
+                records.append(rec)
     return records
 
 

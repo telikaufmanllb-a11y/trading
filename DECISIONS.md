@@ -119,3 +119,32 @@ loss), never silently to a survivor's outcome. This makes survivorship safety a 
 data contract, not something the backtest must remember. `InMemoryPriceSource` exercises the
 contract offline; 8 tests pin the delisting math (wipeout, unknown→conservative, buyout residual,
 delisting-after-exit ignored). yfinance is intentionally NOT adapted here (survivor-biased).
+
+### D-0015 · 2026-06-26 · Opportunistic-vs-coordinated classifier (prototype) in features/
+**Reason:** Implements the D-0013 requirement. `features/opportunistic.assess_coordination` flags a
+cluster as coordinated when BOTH (a) per-insider prices are near-uniform (price CV ≤ 1%) AND (b)
+buys are time-concentrated (span ≤ 1 day) — the fingerprint of a fixed-price offering or director
+purchase plan. Both conditions are required because either alone is too weak (cheap stocks have
+low dispersion; one busy day can be coincidence). Thresholds are provisional with economic
+rationale (HARD RULE 5), to be validated against labeled examples before defining a tradable
+signal. Validated on real cached data: FCBM (15 insiders, cv=0.003, same day) and FMBM (8
+directors, cv=0.000, same day) both correctly flagged coordinated.
+
+### D-0016 · 2026-06-26 · Joint/affiliated owners on one filing = ONE insider (over-count bug fixed)
+**Reason (real bug found via eyeball cross-check, HARD RULE 6):** A single Form 4 can name several
+joint reporting owners. Energizer's 2026-06-22 filing had ONE filing with SIX joint owners (an
+affiliated fund group controlled by one person). The eyeball tool emitted one record per owner, so
+one decision-maker was counted as six independent insiders — manufacturing a phantom 6-insider
+cluster. Fixed: one filing → one record, keyed by the sorted set of owner CIKs
+(`owner_group_key`), so joint owners collapse to a single insider. Pinned by
+`test_joint_owners_on_one_filing_count_as_one_insider`. After the fix, the 800-filing sample's
+candidate clusters dropped 4→2 (Energizer and Mammoth were joint-filer artifacts).
+
+### FINDING-1 · 2026-06-26 · Genuine opportunistic clusters are RARE; naive code-P counts mislead
+In a sample of 800 Form 4s (one day), after fixing joint-owner inflation, the only two surviving
+≥3-insider clusters (FCBM, FMBM) were BOTH coordinated events (an offering and a director purchase
+plan) — i.e. ZERO genuine independent opportunistic clusters in the sample. Implication for the
+backtest universe: the tradable cluster population is much smaller than raw code-P counts imply,
+and a strategy built on unfiltered counts would be trading mostly non-predictive coordinated
+events. The opportunistic filter is not a refinement — it is load-bearing. (Sample is tiny; this
+is intuition, not a measured base rate. A fuller scan should quantify the coordinated fraction.)
