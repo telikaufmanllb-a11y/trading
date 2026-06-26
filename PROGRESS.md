@@ -5,19 +5,22 @@
 
 ---
 
-## NEXT: quantify the coordinated fraction (fuller scan); price-VENDOR decision needs a human
+## NEXT: measured base-rate scan (heavier, attended); price-VENDOR decision needs a human
 
-Opportunistic classifier + joint-owner fix are done & tested. FINDING-1 (DECISIONS.md): in a tiny
-sample, genuine opportunistic clusters were ~0 — coordinated events and joint-filer artifacts
-dominate. Next autonomous steps (offline / light-network, cached):
+The eyeball pipeline now enumerates → collapses joint owners → clusters → classifies coordinated
+→ reports the genuine count (demonstrated: cached 800-filing sample = 0/2 genuine). Remaining:
 
-1. **Quantify, don't eyeball.** Run a fuller cached/polite scan (e.g. a full trading week, no cap)
-   and measure: how many raw ≥3 clusters, how many survive the joint-owner collapse, how many
-   survive the opportunistic filter. This base rate decides whether the signal is even viable
-   before any backtest. Persist the surviving genuine clusters for later use.
-2. **Add an opportunistic flag to the cluster output** so the eyeball tool reports coordinated vs.
-   genuine, and wire `assess_coordination` into the cluster summary.
-3. **Then:** point-in-time universe scaffold (delisting-aware) once the provider is chosen.
+1. **Measured base rate (HEAVIER — run attended or with go-ahead).** A real base rate needs a
+   multi-week, uncapped scan = thousands of EDGAR fetches. Too heavy to run unattended politely.
+   When run: persist raw vs. joint-collapsed vs. opportunistic-surviving cluster counts to
+   `reports/`, plus the surviving genuine clusters (issuer, tickers, dates) for later backtest
+   input. Add a `--out` flag to dump JSON/CSV.
+2. **Lengthen the window realistically.** A ≥3 cluster needs distinct insiders across days; the
+   demo cap stops mid-day so multi-day clusters can't form. The measured scan must NOT cap.
+3. **Then:** point-in-time universe scaffold (delisting-aware) once the price provider is chosen.
+
+⚠️ Open human decisions: (a) concrete delisting-aware price vendor (cost/licensing); (b) whether
+to authorize a large EDGAR base-rate scan (politeness/time). Both flagged; neither blocks tests.
 
 ⚠️ **REVIEW NEEDED (human decision):** A truly delisting-aware price source generally requires a
 paid/licensed vendor (CRSP / Norgate / Sharadar) or a non-trivial survivorship-free build from
@@ -55,6 +58,20 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 2b (coordination wired into eyeball + 403 robustness)
+NEXT: Measured base-rate scan (heavier, attended); add --out dump; price-vendor decision pending
+     (see top of file).
+DID: Wired `assess_coordination` into the cluster pipeline — `PurchaseRecord` now carries mean
+     P-buy price + earliest transaction date, `assess_cluster_coordination` classifies each
+     cluster, and `main()` labels COORDINATED vs. genuine and prints the genuine count. Hardened
+     `get_daily_form4_index` to treat EDGAR 403 (today's not-yet-published index) as absent, not a
+     crash. +4 tests. Demonstrated on the cached 800-filing sample: 0 of 2 clusters genuine.
+RESULTS: 55/55 tests green. Cached-sample readout: 2 raw clusters, both COORDINATED → 0 genuine.
+RED FLAGS / REVIEW NEEDED: Two open human decisions (carried): price vendor; authorization for a
+     large base-rate EDGAR scan. Neither blocks progress or tests.
+RULE CHECK: look-ahead [ok — filing-date windows; classifier uses in-filing price/date only] |
+     survivorship [ok — no price DB yet] | costs modeled [n/a — no backtest yet]
 
 ## 2026-06-26 — Stage 2a (opportunistic classifier + joint-owner over-count fix)
 NEXT: Quantify the coordinated/genuine cluster fractions over a fuller scan; wire the

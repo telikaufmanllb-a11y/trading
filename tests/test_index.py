@@ -46,6 +46,32 @@ def test_parse_master_index_handles_yyyymmdd_dates():
     assert all(e.date_filed == date(2026, 6, 17) for e in entries)
 
 
+def test_get_daily_index_treats_403_and_404_as_absent(tmp_path):
+    # A not-yet-published daily index (today) 403s; weekend/holiday 404s. Both -> [] not a crash.
+    import requests
+
+    from data.edgar import EdgarClient
+
+    class _ErrResponse:
+        def __init__(self, code):
+            self.status_code = code
+
+        def raise_for_status(self):
+            raise requests.HTTPError(f"{self.status_code}", response=self)
+
+    class _ErrSession:
+        def __init__(self, code):
+            self.headers = {}
+            self._code = code
+
+        def get(self, url, timeout=None):
+            return _ErrResponse(self._code)
+
+    for code in (403, 404):
+        client = EdgarClient(cache_dir=tmp_path, session=_ErrSession(code), max_per_sec=1000)
+        assert client.get_daily_form4_index(date(2026, 6, 26)) == []
+
+
 def test_parse_master_index_no_filter_returns_all_data_rows():
     text = (FIXTURES / "master_sample.idx").read_text()
     entries = list(EdgarClient.parse_master_index(text))

@@ -5,6 +5,7 @@ from datetime import date
 from data.form4 import Form4, Form4Transaction, ReportingOwner
 from scripts.eyeball_clusters import (
     PurchaseRecord,
+    assess_cluster_coordination,
     find_clusters,
     owner_group_key,
     purchase_record_from_form4,
@@ -46,6 +47,45 @@ def test_filing_without_open_market_purchase_yields_no_record():
         filing_date=date(2026, 1, 1),
     )
     assert purchase_record_from_form4(f, fallback_cik="1", fallback_name="X") is None
+
+
+def test_record_captures_mean_price_and_earliest_date():
+    f = Form4(
+        issuer_cik="1", issuer_name="X", issuer_ticker="X", period_of_report=date(2026, 1, 5),
+        owners=[_owner("9")],
+        transactions=[
+            Form4Transaction("Common", date(2026, 1, 5), "P", 100, 10.0, "A"),
+            Form4Transaction("Common", date(2026, 1, 3), "P", 100, 12.0, "A"),
+        ],
+        filing_date=date(2026, 1, 6),
+    )
+    rec = purchase_record_from_form4(f, fallback_cik="1", fallback_name="X")
+    assert rec.price == 11.0                       # mean of 10 and 12
+    assert rec.transaction_date == date(2026, 1, 3)  # earliest P-buy date
+
+
+def _prec(issuer, insider, d, price):
+    return PurchaseRecord(issuer_cik=issuer, issuer_name=f"I{issuer}", ticker="T",
+                          insider_cik=insider, filing_date=d, price=price, transaction_date=d)
+
+
+def test_cluster_coordination_flags_uniform_same_day():
+    d = date(2026, 6, 22)
+    recs = [_prec("100", c, d, 12.5) for c in ["A", "B", "C"]]
+    clusters = find_clusters(recs, min_insiders=3, window_days=15)
+    a = assess_cluster_coordination(clusters[0], recs, window_days=15)
+    assert a.is_coordinated is True
+
+
+def test_cluster_coordination_passes_dispersed_buys():
+    recs = [
+        _prec("100", "A", date(2026, 6, 1), 10.0),
+        _prec("100", "B", date(2026, 6, 5), 11.2),
+        _prec("100", "C", date(2026, 6, 12), 9.4),
+    ]
+    clusters = find_clusters(recs, min_insiders=3, window_days=15)
+    a = assess_cluster_coordination(clusters[0], recs, window_days=15)
+    assert a.is_coordinated is False
 
 
 def test_owner_group_key_none_when_no_ciks():

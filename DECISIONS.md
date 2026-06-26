@@ -148,3 +148,14 @@ backtest universe: the tradable cluster population is much smaller than raw code
 and a strategy built on unfiltered counts would be trading mostly non-predictive coordinated
 events. The opportunistic filter is not a refinement — it is load-bearing. (Sample is tiny; this
 is intuition, not a measured base rate. A fuller scan should quantify the coordinated fraction.)
+
+### D-0017 · 2026-06-26 · Eyeball pipeline reports coordinated-vs-genuine; daily index 403 = absent
+**Reason:** Wired `assess_coordination` into the cluster pipeline so the eyeball output labels each
+cluster COORDINATED vs. genuine and reports the genuine count — making the FINDING-1 effect
+visible per-run rather than via ad-hoc scripts. `PurchaseRecord` now carries the insider's mean
+P-buy price and earliest transaction date to feed the classifier. Also hardened
+`get_daily_form4_index`: EDGAR returns **403 (not 404)** for daily-index paths that don't exist
+yet (e.g. today's index before publication), which previously crashed a scan that included today;
+both 403 and 404 are now treated as "no index for this day." Pinned by
+`test_get_daily_index_treats_403_and_404_as_absent`. Demonstrated: cached 800-filing sample →
+0 of 2 clusters genuinely opportunistic.

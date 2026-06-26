@@ -15,21 +15,30 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Iterable, Optional
 
+from features.opportunistic import InsiderBuy, assess_coordination
+
 
 @dataclass(frozen=True)
 class PurchaseRecord:
-    """One insider's open-market purchase of one issuer, keyed by filing date."""
+    """One insider's open-market purchase of one issuer, keyed by filing date.
+
+    `price` is the insider's representative (mean) P-buy price and `transaction_date` the earliest
+    P-buy date — both used to assess whether a cluster is coordinated vs. opportunistic.
+    """
 
     issuer_cik: str
     issuer_name: str
     ticker: Optional[str]
     insider_cik: str
     filing_date: date
+    price: Optional[float] = None
+    transaction_date: Optional[date] = None
 
 
 @dataclass(frozen=True)
@@ -109,18 +118,35 @@ def purchase_record_from_form4(form4, *, fallback_cik: str, fallback_name: str) 
 
     One filing → at most one record (one insider/decision-maker), collapsing joint owners.
     """
-    if not form4.open_market_purchases() or form4.filing_date is None:
+    pbuys = form4.open_market_purchases()
+    if not pbuys or form4.filing_date is None:
         return None
     key = owner_group_key(form4)
     if key is None:
         return None
+    prices = [t.price_per_share for t in pbuys if t.price_per_share]
+    tdates = [t.transaction_date for t in pbuys if t.transaction_date]
     return PurchaseRecord(
         issuer_cik=form4.issuer_cik or fallback_cik,
         issuer_name=form4.issuer_name or fallback_name,
         ticker=form4.issuer_ticker,
         insider_cik=key,
         filing_date=form4.filing_date,
+        price=statistics.fmean(prices) if prices else None,
+        transaction_date=min(tdates) if tdates else form4.filing_date,
     )
+
+
+def assess_cluster_coordination(cluster: "Cluster", records: Iterable[PurchaseRecord], *, window_days: int):
+    """Run the opportunistic-vs-coordinated classifier on a cluster's member buys."""
+    buys = [
+        InsiderBuy(r.insider_cik, r.price, r.transaction_date or r.filing_date)
+        for r in records
+        if r.issuer_cik == cluster.issuer_cik
+        and cluster.window_start <= r.filing_date <= cluster.window_end
+        and r.price is not None
+    ]
+    return assess_coordination(buys)
 
 
 def collect_purchase_records(
@@ -196,9 +222,17 @@ def main() -> None:
     clusters = find_clusters(records, min_insiders=args.min_insiders, window_days=args.window)
     print(f"\n=== {len(clusters)} candidate cluster(s) "
           f"(>= {args.min_insiders} insiders / {args.window}d) ===")
+    genuine = 0
     for c in clusters:
-        print(f"  {c.ticker or '?':6} {c.issuer_name[:38]:38} "
-              f"{c.n_insiders} insiders  {c.window_start}..{c.window_end}")
+        a = assess_cluster_coordination(c, records, window_days=args.window)
+        tag = "COORDINATED" if a.is_coordinated else "genuine?  "
+        if not a.is_coordinated:
+            genuine += 1
+        print(f"  [{tag}] {c.ticker or '?':6} {c.issuer_name[:34]:34} "
+              f"{c.n_insiders} insiders  cv={a.price_cv:.4f} span={a.span_days}d  "
+              f"{c.window_start}..{c.window_end}")
+    print(f"\n{genuine} of {len(clusters)} clusters look genuinely opportunistic "
+          f"(coordinated events excluded per D-0013/D-0015).")
 
 
 if __name__ == "__main__":

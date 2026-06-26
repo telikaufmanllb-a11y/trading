@@ -216,12 +216,14 @@ class EdgarClient:
     def get_daily_form4_index(self, d: date, *, use_cache: bool = True) -> list[IndexEntry]:
         """Fetch one day's master index and return its Form 4 entries.
 
-        Returns [] if the index is absent (weekend/holiday → HTTP 404)."""
+        Returns [] if the index is absent. EDGAR uses 404 for weekend/holiday gaps but 403 for
+        daily-index paths that don't exist yet (e.g. today's index before it's published), so we
+        treat both as "no index for this day" rather than an error."""
         url = self.daily_master_index_url(d)
         try:
             text = self.get_bytes(url, use_cache=use_cache).decode("latin-1")
         except requests.HTTPError as exc:
-            if exc.response is not None and exc.response.status_code == 404:
+            if exc.response is not None and exc.response.status_code in (403, 404):
                 return []
             raise
         return list(self.parse_master_index(text, form_type="4"))
