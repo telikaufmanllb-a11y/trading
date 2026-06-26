@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Cached EDGAR documents & point-in-time stores — large, regenerable, never committed.
+# (Reproducibility comes from pinned code + seeds + EDGAR being a stable public source,
+#  not from committing gigabytes of raw filings.)
+data/raw/
+data/store/
+*.parquet
+*.duckdb
+
+# Generated reports/plots (keep the directory, not its contents)
+reports/*
+!reports/.gitkeep
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
