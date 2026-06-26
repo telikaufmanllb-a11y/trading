@@ -44,3 +44,17 @@ analysis-heavy project than numpy 2.x's marginal gains) and pin `numpy==1.26.4`,
 which satisfies quantstats, pandas 2.2.3, and matplotlib 3.10. The full pinned set now installs
 cleanly and `pytest` passes (4/4). If we ever need numpy 2.x, the alternative is to drop
 quantstats and hand-roll the tearsheet metrics — revisit then, not now.
+
+### D-0007 · 2026-06-26 · Filing date sourced from submissions metadata, never from Form 4 XML
+**Reason:** HARD RULE 1 (no look-ahead). The Form 4 XML carries only transaction dates; the
+public-disclosure date lives in EDGAR submission metadata (`filings.recent.filingDate`, or the
+`<ACCEPTANCE-DATETIME>` header). `parse_form4_xml` therefore takes `filing_date` as an explicit
+caller-supplied input and never infers it from the document. Pinned by
+`test_filing_date_is_not_invented_from_xml`. This makes the single most fatal bug in the project
+a structural impossibility at the parser boundary, not a convention we hope to remember.
+
+### D-0008 · 2026-06-26 · lxml with recover=True for Form 4 parsing
+**Reason:** Real historical filings carry occasional malformations (stray trailing bytes, odd
+encodings). `recover=True` lets us still extract the issuer/owner/transactions instead of hard-
+failing a whole filing, which matters for a point-in-time corpus that must include messy old
+documents. Pinned by `test_recovers_from_trailing_garbage`.
