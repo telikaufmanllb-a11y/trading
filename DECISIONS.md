@@ -75,3 +75,20 @@ point-in-time vendor such as CRSP/Norgate/Sharadar, or a survivorship-free datas
 from EDGAR delisting events + a corporate-actions feed). yfinance may be used ONLY in throwaway
 inspection scripts, never imported on the backtest path. This is recorded now so the constraint
 is locked before any price code is written. Concrete provider selection is the next task.
+
+### D-0011 · 2026-06-26 · Cross-issuer enumeration via the EDGAR daily master index
+**Reason:** The per-issuer submissions JSON can't surface clusters *across* companies, which is
+what the signal needs. The daily master index (`daily-index/YYYY/QTRn/master.YYYYMMDD.idx`,
+pipe-delimited) lists every filing for a day; filtering Form Type == "4" enumerates all Form 4s
+to fetch and parse. Weekend/holiday indexes 404 → treated as empty. **Regression caught by live
+validation:** daily-index "Date Filed" is `YYYYMMDD`, not ISO `YYYY-MM-DD`; the ISO-only parser
+silently dropped every row (0 results) until fixed. The unrealistic ISO fixture had hidden the
+bug — fixture now uses the real format, pinned by `test_parse_master_index_handles_yyyymmdd_dates`.
+Lesson re-affirmed: eyeball real data; a green test against a wrong fixture proves nothing.
+
+### D-0012 · 2026-06-26 · Form 4 XML extracted from the full-submission .txt; acceptance time = filing date
+**Reason:** The daily index points at the full-submission `.txt`, not the standalone XML.
+`extract_xml_from_submission` pulls the `<XML>…</XML>` block to feed the parser, and
+`acceptance_datetime_from_submission_header` reads `<ACCEPTANCE-DATETIME>` as the public-
+disclosure timestamp — the correct filing-date source (HARD RULE 1). Validated end-to-end against
+a real 2026-06-25 filing (916 Form 4s enumerated that day).

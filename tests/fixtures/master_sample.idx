@@ -1,0 +1,12 @@
+Description:           Master Index of EDGAR Dissemination Feed by CIK
+Last Data Received:    June 17, 2026
+Comment:              For these files (sorted by CIK)
+Anonymous FTP:        ftp://ftp.sec.gov/edgar/
+
+CIK|Company Name|Form Type|Date Filed|Filename
+--------------------------------------------------------------------------------
+320193|Apple Inc.|4|20260617|edgar/data/320193/0001140361-26-025622.txt
+320193|Apple Inc.|8-K|20260617|edgar/data/320193/0000320193-26-000070.txt
+1000045|EXAMPLE MICROCAP CORP|4|20260617|edgar/data/1000045/0001140361-26-025630.txt
+1000045|EXAMPLE MICROCAP CORP|3|20260617|edgar/data/1000045/0001140361-26-025631.txt
+2222222|ANOTHER CO|4|20260617|edgar/data/2222222/0001140361-26-025640.txt

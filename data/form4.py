@@ -206,6 +206,21 @@ def parse_form4_xml(
     )
 
 
+def extract_xml_from_submission(text: str) -> Optional[bytes]:
+    """Pull the ownership-document XML out of an EDGAR full-submission (.txt) file.
+
+    Full submissions wrap the Form 4 XML in `<XML> ... </XML>` tags inside a `<DOCUMENT>`. The
+    daily index points at this .txt, so we extract the XML block to feed `parse_form4_xml`.
+    Returns None if no XML block is present.
+    """
+    start_tag, end_tag = "<XML>", "</XML>"
+    start = text.find(start_tag)
+    end = text.find(end_tag)
+    if start == -1 or end == -1 or end < start:
+        return None
+    return text[start + len(start_tag): end].strip().encode("utf-8")
+
+
 def acceptance_datetime_from_submission_header(text: str) -> Optional[datetime]:
     """Extract the acceptance timestamp from a full-submission (.txt) header.
 

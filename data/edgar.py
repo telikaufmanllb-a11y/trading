@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import hashlib
 import time
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
 import requests
 
@@ -23,7 +24,31 @@ import config
 from data.form4 import Form4, parse_form4_xml
 
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik10}.json"
-ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
+ARCHIVES_ROOT = "https://www.sec.gov/Archives/"
+ARCHIVES_BASE = ARCHIVES_ROOT + "edgar/data"
+DAILY_MASTER_INDEX_URL = (
+    ARCHIVES_ROOT + "edgar/daily-index/{year}/QTR{qtr}/master.{yyyymmdd}.idx"
+)
+
+
+@dataclass(frozen=True)
+class IndexEntry:
+    """One row of an EDGAR master index (pipe-delimited)."""
+
+    cik: str
+    company: str
+    form_type: str
+    date_filed: Optional[date]
+    filename: str  # e.g. edgar/data/320193/0001140361-26-025622.txt
+
+    @property
+    def accession(self) -> str:
+        """Accession number (dashed) derived from the submission .txt filename."""
+        return self.filename.rsplit("/", 1)[-1].removesuffix(".txt")
+
+    @property
+    def submission_txt_url(self) -> str:
+        return ARCHIVES_ROOT + self.filename
 
 
 def _cik10(cik: str | int) -> str:
@@ -158,6 +183,49 @@ class EdgarClient:
         accession = _format_accession(accession_no_dashes)
         return parse_form4_xml(raw, filing_date=filing_date, accession=accession)
 
+    # --- daily index (cross-issuer enumeration) ----------------------------------------------
+
+    @staticmethod
+    def daily_master_index_url(d: date) -> str:
+        qtr = (d.month - 1) // 3 + 1
+        return DAILY_MASTER_INDEX_URL.format(
+            year=d.year, qtr=qtr, yyyymmdd=d.strftime("%Y%m%d")
+        )
+
+    @staticmethod
+    def parse_master_index(text: str, *, form_type: Optional[str] = None) -> Iterator[IndexEntry]:
+        """Parse a pipe-delimited EDGAR master index into entries.
+
+        The file has a multi-line header; we identify data rows structurally (exactly 5
+        pipe-separated fields whose 4th field parses as an ISO date) rather than counting header
+        lines, which is robust to header-format drift. `form_type` filters (e.g. "4").
+        """
+        for line in text.splitlines():
+            parts = line.split("|")
+            if len(parts) != 5:
+                continue
+            cik, company, ftype, date_filed, filename = (p.strip() for p in parts)
+            d = _parse_index_date(date_filed)
+            if d is None:  # header / separator lines fail the date check
+                continue
+            if form_type is not None and ftype != form_type:
+                continue
+            yield IndexEntry(cik=cik.lstrip("0") or "0", company=company, form_type=ftype,
+                             date_filed=d, filename=filename)
+
+    def get_daily_form4_index(self, d: date, *, use_cache: bool = True) -> list[IndexEntry]:
+        """Fetch one day's master index and return its Form 4 entries.
+
+        Returns [] if the index is absent (weekend/holiday → HTTP 404)."""
+        url = self.daily_master_index_url(d)
+        try:
+            text = self.get_bytes(url, use_cache=use_cache).decode("latin-1")
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                return []
+            raise
+        return list(self.parse_master_index(text, form_type="4"))
+
     def iter_issuer_form4s(self, cik: str | int, *, since: Optional[date] = None, use_cache: bool = True):
         """Yield parsed `Form4` objects for every Form 4 in an issuer's recent submissions.
 
@@ -178,6 +246,16 @@ def _parse_iso_date(s: str) -> Optional[date]:
         return datetime.strptime(s, "%Y-%m-%d").date()
     except (ValueError, TypeError):
         return None
+
+
+def _parse_index_date(s: str) -> Optional[date]:
+    """EDGAR index 'Date Filed' is YYYYMMDD in daily indexes and YYYY-MM-DD in some others."""
+    for fmt in ("%Y%m%d", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except (ValueError, TypeError):
+            continue
+    return None
 
 
 def _format_accession(accession_no_dashes: str) -> str:

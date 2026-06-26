@@ -5,21 +5,21 @@
 
 ---
 
-## NEXT: Stage 1 (cont.) — multi-issuer P-code ingest + eyeball a real cluster; PriceSource iface
+## NEXT: Stage 1 (cont.) — run the cluster eyeball scan; then PriceSource iface
 
-Fetch→parse for real filings is done and tested; price-source policy is decided (D-0010:
-delisting-aware required, yfinance barred from the backtest path). Next highest-value:
+Cross-issuer enumeration now works (daily master index → Form 4 `.txt` → XML → parsed `Form4`),
+validated live (916 Form 4s on 2026-06-25). Next highest-value:
 
-1. **Find and eyeball a real cluster.** Ingest Form 4s across a *set* of issuers over a window,
-   keep only open-market purchases (code `P`/`A`), and surface cases where ≥3 distinct insider
-   CIKs bought the same issuer within ~15 days. Manually inspect a few — confirm they look like
-   the literature (opportunistic, small/mid-cap skew) before automating the detector in Stage 2.
-   Note: the per-issuer submissions endpoint is owner-or-issuer keyed; to scan broadly we likely
-   need the daily EDGAR Form 4 index (`full-index`/`daily-index`) — add that to the client.
-2. **`PriceSource` interface (swappable, delisting-aware).** Define the abstract contract now
-   (e.g. `prices(ticker, start, end) -> DataFrame` with point-in-time, delisting-marked data) so
-   the backtest is provider-agnostic. Pick the concrete delisting-aware provider per D-0010. Do
-   NOT import yfinance on any backtest path — eyeball-only scripts may use it, clearly fenced.
+1. **Run the bounded cluster eyeball.** Write an inspection script (`reports/`-oriented, not on
+   the backtest path) that scans a small window of daily indices, fetches each Form 4, keeps only
+   open-market purchases (code `P`/`A`), groups by issuer, and surfaces issuers with ≥3 distinct
+   insider CIKs buying within ~15 days. Disk cache makes re-runs free; be polite on the first run
+   (rate-limited; a day has ~900 Form 4s). Manually inspect a few clusters vs. the literature
+   (opportunistic, small/mid-cap skew) before automating the detector in Stage 2.
+2. **`PriceSource` interface (swappable, delisting-aware).** Define the abstract contract
+   (`prices(ticker, start, end) -> DataFrame`, point-in-time, delisting-marked) so the backtest is
+   provider-agnostic. Pick the concrete delisting-aware provider per D-0010. yfinance only in
+   fenced eyeball scripts, never on the backtest path.
 
 Do NOT build the cluster detector or backtest yet. Stage 1 is "data + eyeball" first.
 
@@ -52,6 +52,24 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 1c (cross-issuer enumeration via daily index)
+NEXT: Run the bounded cluster eyeball scan (daily indices → P-code buys → group by issuer → ≥3
+     insiders/15d), then define the delisting-aware `PriceSource` interface (see top of file).
+DID: Added daily master-index support to `EdgarClient` (`daily_master_index_url`,
+     `parse_master_index`, `get_daily_form4_index`) + an `IndexEntry` type, and
+     `extract_xml_from_submission` to pull Form 4 XML out of a full-submission `.txt`. Offline
+     fixtures (master index + wrapped submission) and tests. Live validation caught a REAL bug:
+     daily-index dates are YYYYMMDD not ISO, so the parser silently returned 0 rows — fixed the
+     date parser to accept both formats AND fixed the unrealistic fixture (added a regression
+     test). Re-validated live: 916 Form 4s enumerated for 2026-06-25, one parsed end-to-end.
+RESULTS: 28/28 tests green. N/A on returns (no signal/backtest yet).
+RED FLAGS / REVIEW NEEDED: None. Methodology note: a green test against a fabricated fixture hid a
+     real format bug until live data exposed it — reinforces the "eyeball real data" rule. The
+     cluster eyeball scan will hit EDGAR for many docs; first run is rate-limited + cached.
+RULE CHECK: look-ahead [ok — filing date taken from <ACCEPTANCE-DATETIME>/index date, never the
+          XML transaction date] | survivorship [ok — still no price DB; policy D-0010 holds]
+          | costs modeled [n/a — no backtest yet]
 
 ## 2026-06-26 — Stage 1b (real fetch→parse wiring + price-source policy)
 NEXT: Multi-issuer P-code ingest to surface & eyeball a real ≥3-insider cluster (likely needs the
