@@ -4,10 +4,11 @@ No network is touched: a stub session returns canned bytes so tests are determin
 """
 
 from datetime import date
+from pathlib import Path
 
-import pytest
+from data.edgar import EdgarClient, RateLimiter, _cik10, _format_accession
 
-from data.edgar import EdgarClient, RateLimiter, _cik10
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class _FakeResponse:
@@ -98,3 +99,32 @@ def test_iter_form4_filings_selects_only_form4():
     assert len(rows) == 2  # only the two Form 4s
     assert rows[0] == ("000000000024000001", date(2024, 3, 18), "a.xml")
     assert rows[1] == ("000000000024000003", date(2024, 3, 20), "c.xml")
+
+
+def test_raw_document_name_strips_xsl_viewer_dir():
+    assert EdgarClient.raw_document_name("xslF345X06/form4.xml") == "form4.xml"
+    assert EdgarClient.raw_document_name("form4.xml") == "form4.xml"
+    assert EdgarClient.raw_document_name("a/b/wf-form4_123.xml") == "wf-form4_123.xml"
+
+
+def test_format_accession():
+    assert _format_accession("000032019324000010") == "0000320193-24-000010"
+    assert _format_accession("0000320193-24-000010") == "0000320193-24-000010"
+
+
+def test_load_form4_attaches_filing_date_from_metadata(tmp_path):
+    # Serve the saved REAL Apple Form 4 from a fake session; prove load_form4 resolves the raw
+    # doc name, parses it, and attaches the caller-supplied filing date (HARD RULE 1) — never
+    # the XML's periodOfReport.
+    raw = (FIXTURES / "form4_real_aapl.xml").read_bytes()
+    session = _FakeSession(raw)
+    client = EdgarClient(cache_dir=tmp_path, session=session, max_per_sec=1000)
+    fd = date(2026, 6, 17)
+    f = client.load_form4(320193, "000114036126025622", "xslF345X06/form4.xml", fd)
+    assert f.issuer_ticker == "AAPL"
+    assert f.filing_date == fd                      # from metadata
+    assert f.period_of_report == date(2026, 6, 15)  # from XML — and distinct from filing_date
+    assert f.filing_date != f.period_of_report
+    assert f.accession == "0001140361-26-025622"
+    # This particular filing is routine (codes M/F), so it must yield NO open-market purchases.
+    assert f.open_market_purchases() == []

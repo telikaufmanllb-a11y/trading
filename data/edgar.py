@@ -20,6 +20,7 @@ from typing import Optional
 import requests
 
 import config
+from data.form4 import Form4, parse_form4_xml
 
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik10}.json"
 ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
@@ -128,9 +129,60 @@ class EdgarClient:
         url = self.filing_document_url(cik, accession_no_dashes, document)
         return self.get_bytes(url, use_cache=use_cache)
 
+    @staticmethod
+    def raw_document_name(primary_document: str) -> str:
+        """Strip EDGAR's XSL viewer directory from a primaryDocument path.
+
+        Submissions list the *styled* primary document (e.g. `xslF345X06/form4.xml`); the raw,
+        parseable XML is the same filename without that viewer directory.
+        """
+        return primary_document.rsplit("/", 1)[-1]
+
+    def load_form4(
+        self,
+        cik: str | int,
+        accession_no_dashes: str,
+        primary_document: str,
+        filing_date: Optional[date] = None,
+        *,
+        use_cache: bool = True,
+    ) -> Form4:
+        """Fetch a single Form 4's raw XML and parse it, attaching the filing date.
+
+        `filing_date` MUST come from submission metadata (HARD RULE 1) — pass the `filingDate`
+        yielded by `iter_form4_filings`. It is attached to the result, never derived from the XML.
+        """
+        raw = self.fetch_form4_xml(
+            cik, accession_no_dashes, self.raw_document_name(primary_document), use_cache=use_cache
+        )
+        accession = _format_accession(accession_no_dashes)
+        return parse_form4_xml(raw, filing_date=filing_date, accession=accession)
+
+    def iter_issuer_form4s(self, cik: str | int, *, since: Optional[date] = None, use_cache: bool = True):
+        """Yield parsed `Form4` objects for every Form 4 in an issuer's recent submissions.
+
+        Each result carries its filing date from submission metadata. `since` filters to filings
+        on/after that date. Fetches are rate-limited and disk-cached by the underlying client.
+        """
+        submissions = self.get_submissions(cik, use_cache=use_cache)
+        for accn, fdate, primary in self.iter_form4_filings(submissions):
+            if accn is None or primary is None:
+                continue
+            if since is not None and (fdate is None or fdate < since):
+                continue
+            yield self.load_form4(cik, accn, primary, fdate, use_cache=use_cache)
+
 
 def _parse_iso_date(s: str) -> Optional[date]:
     try:
         return datetime.strptime(s, "%Y-%m-%d").date()
     except (ValueError, TypeError):
         return None
+
+
+def _format_accession(accession_no_dashes: str) -> str:
+    """Re-insert dashes into an 18-digit accession (0000320193-24-000010)."""
+    s = accession_no_dashes
+    if len(s) == 18 and "-" not in s:
+        return f"{s[:10]}-{s[10:12]}-{s[12:]}"
+    return s

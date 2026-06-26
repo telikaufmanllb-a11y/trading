@@ -5,22 +5,21 @@
 
 ---
 
-## NEXT: Stage 1 (cont.) — wire fetch→parse for real filings, then prices + universe
+## NEXT: Stage 1 (cont.) — multi-issuer P-code ingest + eyeball a real cluster; PriceSource iface
 
-EDGAR client, Form 4 parser, and deterministic tests are done (this cycle). Next highest-value:
+Fetch→parse for real filings is done and tested; price-source policy is decided (D-0010:
+delisting-aware required, yfinance barred from the backtest path). Next highest-value:
 
-1. **End-to-end fetch→parse of a real filing.** The submissions `primaryDocument` is the
-   XSL-styled viewer path (`xslF345X06/form4.xml`); strip that prefix to get the raw parseable
-   XML. Add an `EdgarClient` method that, given a Form 4 row, fetches the raw XML and returns a
-   `Form4` with `filing_date` attached **from the submissions `filingDate`** (HARD RULE 1) —
-   never from the XML. Cover with a test using a cached real fixture.
-2. **Point-in-time price source + delisting-aware universe.** Must include delisted/bankrupt/
-   acquired names (HARD RULE 2). yfinance is installed but is survivor-biased and drops dead
-   tickers — decide in DECISIONS.md whether it's acceptable for an eyeball-only first pass or
-   whether we need a delisting-aware source before any backtest. Do NOT let a survivor-only DB
-   reach the backtest.
-3. **Eyeball real clusters.** Pull a handful of historical ≥3-insider buy clusters and inspect
-   them by hand; confirm the pattern matches the literature before automating the detector.
+1. **Find and eyeball a real cluster.** Ingest Form 4s across a *set* of issuers over a window,
+   keep only open-market purchases (code `P`/`A`), and surface cases where ≥3 distinct insider
+   CIKs bought the same issuer within ~15 days. Manually inspect a few — confirm they look like
+   the literature (opportunistic, small/mid-cap skew) before automating the detector in Stage 2.
+   Note: the per-issuer submissions endpoint is owner-or-issuer keyed; to scan broadly we likely
+   need the daily EDGAR Form 4 index (`full-index`/`daily-index`) — add that to the client.
+2. **`PriceSource` interface (swappable, delisting-aware).** Define the abstract contract now
+   (e.g. `prices(ticker, start, end) -> DataFrame` with point-in-time, delisting-marked data) so
+   the backtest is provider-agnostic. Pick the concrete delisting-aware provider per D-0010. Do
+   NOT import yfinance on any backtest path — eyeball-only scripts may use it, clearly fenced.
 
 Do NOT build the cluster detector or backtest yet. Stage 1 is "data + eyeball" first.
 
@@ -53,6 +52,26 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 1b (real fetch→parse wiring + price-source policy)
+NEXT: Multi-issuer P-code ingest to surface & eyeball a real ≥3-insider cluster (likely needs the
+     EDGAR daily/full Form 4 index); define a swappable delisting-aware `PriceSource` interface
+     (see top of file).
+DID: Added `EdgarClient.raw_document_name` (strips the `xslF345X06/` viewer dir), `load_form4`
+     (fetch raw XML → parse → attach filing_date + dashed accession from metadata), and
+     `iter_issuer_form4s` (generator over an issuer's Form 4s, filing-date filtered). Saved a real
+     Apple Form 4 as an offline fixture and added tests pinning raw-doc resolution, accession
+     formatting, and that filing_date comes from metadata and stays distinct from periodOfReport.
+     Eyeballed a real filing by hand: SVP/GC, codes M (option exercise, $0) + F (tax withholding)
+     — correctly parsed and correctly yields ZERO open-market purchases (exactly the routine
+     activity the strategy must ignore). Recorded price-source policy (D-0010).
+RESULTS: 22/22 tests green. N/A on returns (no signal/backtest yet).
+RED FLAGS / REVIEW NEEDED: None.
+RULE CHECK: look-ahead [ok — load_form4 attaches filing_date from submissions metadata only;
+          pinned by test_load_form4_attaches_filing_date_from_metadata]
+          | survivorship [ok — price-source policy now bars survivor-biased yfinance from the
+          backtest path (D-0010); no price code written yet]
+          | costs modeled [n/a — no backtest yet]
 
 ## 2026-06-26 — Stage 1a (EDGAR client + Form 4 parser)
 NEXT: Wire fetch→parse for real filings (strip `xslF345X06/` to get raw XML; attach filing_date

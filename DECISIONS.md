@@ -58,3 +58,20 @@ a structural impossibility at the parser boundary, not a convention we hope to r
 encodings). `recover=True` lets us still extract the issuer/owner/transactions instead of hard-
 failing a whole filing, which matters for a point-in-time corpus that must include messy old
 documents. Pinned by `test_recovers_from_trailing_garbage`.
+
+### D-0009 · 2026-06-26 · Raw Form 4 XML resolved by stripping the XSL viewer dir
+**Reason:** EDGAR's submissions index points `primaryDocument` at the styled viewer path
+(`xslF345X06/form4.xml`); the machine-readable XML is the same filename without that directory.
+`EdgarClient.raw_document_name` strips it so `load_form4`/`iter_issuer_form4s` fetch parseable
+XML. Validated against a saved real Apple Form 4 (`tests/fixtures/form4_real_aapl.xml`).
+
+### D-0010 · 2026-06-26 · Price source MUST be delisting-aware; yfinance barred from the backtest
+**Reason:** HARD RULE 2 (survivorship bias = invalid results). yfinance is installed and fine for
+quick *eyeballing*, but it is survivor-biased: it drops delisted/bankrupt/acquired tickers, which
+would silently delete exactly the cluster-buys that went to zero and make any strategy look
+brilliant. **Decision:** the backtest price layer will sit behind a swappable `PriceSource`
+interface, and its production implementation must come from a delisting-aware source (e.g. a
+point-in-time vendor such as CRSP/Norgate/Sharadar, or a survivorship-free dataset we assemble
+from EDGAR delisting events + a corporate-actions feed). yfinance may be used ONLY in throwaway
+inspection scripts, never imported on the backtest path. This is recorded now so the constraint
+is locked before any price code is written. Concrete provider selection is the next task.
