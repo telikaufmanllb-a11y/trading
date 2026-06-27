@@ -190,3 +190,15 @@ position sizing and statistical power will be real constraints (need many years 
 The opportunistic filter is doing real work (it removed 80% of raw clusters here). Caveat: tiny
 sample (2.4 days), recent-only; not a statistically meaningful rate — a multi-year scan is needed
 for that, which requires the heavier ingestion still gated on environment/time, not correctness.
+
+### D-0019 · 2026-06-26 · signals/insider_cluster.py — swappable signal with look-ahead-correct trigger
+**Reason:** Productizes the validated cluster logic behind the D-0004 contract
+(`generate_signals(...) -> events`). The important correctness point: a cluster's entry date is the
+filing date at which the rolling window FIRST contains `min_insiders` distinct insiders — i.e. when
+the N-th insider's purchase becomes public — NOT the first buy's date (which is not yet a knowable
+cluster). The eyeball tool reported the window's first date for inspection; this module computes the
+actionable trigger via a two-pointer sweep (`_cluster_trigger`), so backtest entries can never use
+information from before the cluster was disclosable (HARD RULE 1). Coordinated clusters excluded by
+default (D-0015); joint owners assumed collapsed upstream (D-0016). Validated on the real LOVE
+cluster: entry_date = 2026-06-23 (3rd insider's filing), not 2026-06-22. 7 unit tests pin the
+trigger-date logic, window boundaries, coordination exclusion, dedup, and date-range filtering.

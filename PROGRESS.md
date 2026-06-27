@@ -5,25 +5,25 @@
 
 ---
 
-## NEXT: formalize the signal as a swappable `signals/` module; then prototype prices + backtest
+## NEXT: prototype price adapter (fenced) → event-driven backtest skeleton (plumbing only)
 
-Base rate measured (FINDING-2): genuine clusters exist (LOVE confirmed) but are ~20% of raw
-clusters and rare in absolute terms. The signal LOGIC is validated; next, productize it:
+Swappable signal module is done & validated (D-0019; LOVE entry 2026-06-23, look-ahead-correct).
+Next:
 
-1. **`signals/insider_cluster.py` implementing the swappable contract** (D-0004:
-   `generate_signals(date_range) -> events`). Reuse the validated, tested helpers (joint-owner
-   collapse D-0016, `find_clusters`, opportunistic filter D-0015). Output point-in-time events
-   keyed on FILING DATE with the genuine/coordinated flag attached. Unit-test the event shape.
-2. **Prototype `PriceSource` adapter (fenced, free).** Per D-0018(b): a yfinance/stooq adapter
-   marked PROTOTYPE-ONLY (survivor-biased; never the trusted/holdout result) so the backtest
-   engine can be developed against real-ish prices. D-0010 still bars it from final results.
-3. **Then Stage 3:** event-driven backtest skeleton (filing-date entry, costs/slippage/tax), run
-   on the prototype data as a *plumbing* check only — no conclusions until a delisting-aware
-   source is supplied.
+1. **Prototype `PriceSource` adapter (fenced, free).** Per D-0018(b): a yfinance (or stooq)
+   adapter implementing `data.prices.PriceSource`, in a clearly PROTOTYPE-ONLY module, survivor-
+   biased, never the trusted/holdout result. Lets the backtest be developed against real-ish data.
+   Must NOT be importable from the trusted backtest path (D-0010).
+2. **Stage 3 backtest skeleton** in `backtest/`: consume `SignalEvent`s, enter at `entry_date`
+   (filing date), model commissions + spread/slippage + short-term cap-gains tax, support holding
+   periods 21/63/126/252d, use `PriceSource.holding_period_return` (delisting-safe). Compare vs
+   SPY. Run on PROTOTYPE prices as a PLUMBING check only — print results with a loud
+   "PROTOTYPE/survivor-biased — not a conclusion" banner. Apply kill condition ONLY later on
+   delisting-aware data.
 
 ⚠️ Still needs a human (real-world, not code): a delisting-aware price VENDOR for any TRUSTED
-result (cost/licensing; D-0018b). A multi-YEAR base-rate scan is also wanted for statistical power
-but is heavy (env kills long background jobs; run in bounded chunks). Neither blocks the above.
+result (D-0018b). A multi-YEAR base-rate scan is wanted for statistical power but is heavy (env
+kills long background jobs; run in bounded chunks). Neither blocks the above.
 
 ---
 
@@ -54,6 +54,20 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 2d (swappable signal module, look-ahead-correct trigger)
+NEXT: Fenced prototype price adapter → Stage 3 backtest skeleton (plumbing only) (see top).
+DID: Built `signals/insider_cluster.py` implementing the D-0004 swappable contract
+     `generate_signals(buys, …) -> [SignalEvent]`. Key correctness: entry/trigger date is the
+     filing date at which the rolling window FIRST reaches `min_insiders` distinct insiders (the
+     actionable disclosure date), via a two-pointer sweep — NOT the first buy (HARD RULE 1).
+     Coordinated excluded by default (D-0015). 7 unit tests. Validated on real LOVE cluster:
+     entry_date = 2026-06-23 (3rd/CEO filing), n=3, not coordinated. Logged D-0019.
+RESULTS: 62/62 tests green.
+RED FLAGS / REVIEW NEEDED: (carried) delisting-aware vendor for trusted results; multi-year scan
+     for power. Neither blocks the next steps.
+RULE CHECK: look-ahead [ok — trigger date is the N-th insider's FILING date, explicitly tested] |
+     survivorship [ok — no price DB yet] | costs modeled [n/a — backtest is next]
 
 ## 2026-06-26 — Stage 2c (base-rate scan + first confirmed genuine cluster)
 NEXT: Formalize `signals/insider_cluster.py` (swappable generate_signals); prototype price adapter;
