@@ -5,29 +5,25 @@
 
 ---
 
-## NEXT: measured base-rate scan (heavier, attended); price-VENDOR decision needs a human
+## NEXT: formalize the signal as a swappable `signals/` module; then prototype prices + backtest
 
-The eyeball pipeline now enumerates → collapses joint owners → clusters → classifies coordinated
-→ reports the genuine count (demonstrated: cached 800-filing sample = 0/2 genuine). Remaining:
+Base rate measured (FINDING-2): genuine clusters exist (LOVE confirmed) but are ~20% of raw
+clusters and rare in absolute terms. The signal LOGIC is validated; next, productize it:
 
-1. **Measured base rate (HEAVIER — run attended or with go-ahead).** A real base rate needs a
-   multi-week, uncapped scan = thousands of EDGAR fetches. Too heavy to run unattended politely.
-   When run: persist raw vs. joint-collapsed vs. opportunistic-surviving cluster counts to
-   `reports/`, plus the surviving genuine clusters (issuer, tickers, dates) for later backtest
-   input. Add a `--out` flag to dump JSON/CSV.
-2. **Lengthen the window realistically.** A ≥3 cluster needs distinct insiders across days; the
-   demo cap stops mid-day so multi-day clusters can't form. The measured scan must NOT cap.
-3. **Then:** point-in-time universe scaffold (delisting-aware) once the price provider is chosen.
+1. **`signals/insider_cluster.py` implementing the swappable contract** (D-0004:
+   `generate_signals(date_range) -> events`). Reuse the validated, tested helpers (joint-owner
+   collapse D-0016, `find_clusters`, opportunistic filter D-0015). Output point-in-time events
+   keyed on FILING DATE with the genuine/coordinated flag attached. Unit-test the event shape.
+2. **Prototype `PriceSource` adapter (fenced, free).** Per D-0018(b): a yfinance/stooq adapter
+   marked PROTOTYPE-ONLY (survivor-biased; never the trusted/holdout result) so the backtest
+   engine can be developed against real-ish prices. D-0010 still bars it from final results.
+3. **Then Stage 3:** event-driven backtest skeleton (filing-date entry, costs/slippage/tax), run
+   on the prototype data as a *plumbing* check only — no conclusions until a delisting-aware
+   source is supplied.
 
-⚠️ Open human decisions: (a) concrete delisting-aware price vendor (cost/licensing); (b) whether
-to authorize a large EDGAR base-rate scan (politeness/time). Both flagged; neither blocks tests.
-
-⚠️ **REVIEW NEEDED (human decision):** A truly delisting-aware price source generally requires a
-paid/licensed vendor (CRSP / Norgate / Sharadar) or a non-trivial survivorship-free build from
-SEC Form 25 delistings + a corporate-actions feed. This has cost/licensing implications I should
-NOT decide autonomously. The `PriceSource` interface is ready to accept whichever is chosen.
-
-Do NOT build the backtest yet. Finish Stage 1 (concrete prices + universe) before Stage 2/3.
+⚠️ Still needs a human (real-world, not code): a delisting-aware price VENDOR for any TRUSTED
+result (cost/licensing; D-0018b). A multi-YEAR base-rate scan is also wanted for statistical power
+but is heavy (env kills long background jobs; run in bounded chunks). Neither blocks the above.
 
 ---
 
@@ -58,6 +54,26 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 2c (base-rate scan + first confirmed genuine cluster)
+NEXT: Formalize `signals/insider_cluster.py` (swappable generate_signals); prototype price adapter;
+     backtest skeleton (see top of file).
+DID: User delegated the two open decisions ("use your best judgement") — logged as D-0018: (a)
+     authorized + ran a base-rate scan; (b) deferred paid price-vendor procurement (real-money/
+     identity action), will use a fenced free adapter for prototyping only. Added `--out` JSON dump
+     + a JSON-serializable `scan()` entry point. NOTE: a long background scan was reaped by the env
+     (exit 0 but incomplete) — lesson: run bounded foreground chunks, not long background jobs.
+     Ran a bounded 2.4-day scan (3,600 filings, 2026-06-22..24).
+KEY FINDING (FINDING-2): 266 P-buy records → 5 raw clusters → 4 coordinated, **1 GENUINE
+     (Lovesac/LOVE)**, eyeball-confirmed (director+President+CEO, dispersed prices/dates =
+     independent accumulation). Genuine clusters exist and the pipeline isolates them (~20% of raw)
+     — hypothesis is testable — but they are rare (≈2/week here), so statistical power needs many
+     years of data.
+RESULTS: 55/55 tests green. Base rate: 5 raw / 4 coordinated / 1 genuine over ~2.4 days.
+RED FLAGS / REVIEW NEEDED: (carried) delisting-aware vendor for any TRUSTED result; multi-year scan
+     for power (heavy). Neither blocks formalizing the signal or building backtest plumbing.
+RULE CHECK: look-ahead [ok — filing-date windows throughout] | survivorship [ok — no price DB yet;
+     prototype adapter will be fenced] | costs modeled [n/a — no backtest yet]
 
 ## 2026-06-26 — Stage 2b (coordination wired into eyeball + 403 robustness)
 NEXT: Measured base-rate scan (heavier, attended); add --out dump; price-vendor decision pending

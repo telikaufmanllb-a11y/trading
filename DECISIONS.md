@@ -159,3 +159,34 @@ yet (e.g. today's index before publication), which previously crashed a scan tha
 both 403 and 404 are now treated as "no index for this day." Pinned by
 `test_get_daily_index_treats_403_and_404_as_absent`. Demonstrated: cached 800-filing sample →
 0 of 2 clusters genuinely opportunistic.
+
+### D-0018 · 2026-06-26 · Judgement calls on the two open questions (user delegated)
+**Reason:** User said "use your best judgement for any unanswered questions."
+**(a) Base-rate scan — AUTHORIZED & running.** A real coordinated-vs-genuine base rate needs
+several CONSECUTIVE full days (genuine independent clusters only form across a multi-day window;
+single-day clusters are inherently the coordinated kind). Launched a full trading-week (2026-06-22
+..26), uncapped, polite (8 req/s, cached) background scan → `reports/cluster_scan_week.json`.
+Within SEC fair-access limits; ~15 min. Added `--out` to persist results + a JSON-serializable
+`scan()` entry point.
+**(b) Price vendor — DEFERRED as real-world procurement (not auto-decidable).** A delisting-aware
+vendor (CRSP/Norgate/Sharadar) requires an account + payment + credentials, which I will not
+create on the user's behalf even under "best judgement" — that is a real-money/identity action,
+not a code decision. Plan: keep the `PriceSource` interface ready; when the backtest needs data,
+add a clearly-fenced FREE adapter (yfinance/stooq) for PROTOTYPING ONLY, with loud survivorship
+caveats, and treat any results from it as provisional until a delisting-aware source is supplied.
+No trusted/holdout result will ever come from the survivor-biased prototype source (D-0010 holds).
+
+### FINDING-2 · 2026-06-26 · First measured base rate + a CONFIRMED genuine cluster (Lovesac)
+Scan of ~3,600 Form 4s across 2026-06-22..24 (~2.4 trading days; `reports/cluster_scan_2day.json`):
+  * 266 insider open-market-purchase records (after joint-owner collapse, D-0016)
+  * 5 raw ≥3-insider/15-day clusters → 4 COORDINATED, **1 genuine** (~20% survive the filter)
+  * Coordinated excluded: FCBM (offering, 15), FMBM (director plan, 8), BZFD (4), KARD (3).
+  * **Genuine: LOVE (Lovesac)** — director (30k @ $14.68, txn 6/18), President (1.7k @ $14.41,
+    6/22), CEO (1.8k @ $13.64, 6/22): three distinct insiders, ~7% price spread, multiple days =
+    independent accumulation. Textbook opportunistic cluster.
+**Implications:** (1) Genuine clusters EXIST and the pipeline isolates them — the hypothesis is
+testable. (2) They are RARE: order-of-magnitude ~2/week from this sample → a small universe;
+position sizing and statistical power will be real constraints (need many years of history). (3)
+The opportunistic filter is doing real work (it removed 80% of raw clusters here). Caveat: tiny
+sample (2.4 days), recent-only; not a statistically meaningful rate — a multi-year scan is needed
+for that, which requires the heavier ingestion still gated on environment/time, not correctness.

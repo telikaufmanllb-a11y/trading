@@ -203,7 +203,39 @@ def _trading_days_back(n: int, end: Optional[date] = None) -> list[date]:
     return sorted(out)
 
 
+def scan(client, days, *, min_insiders: int, window_days: int, max_filings: Optional[int] = None) -> dict:
+    """Run the full eyeball pipeline and return a results dict (counts + per-cluster detail).
+
+    The dict is JSON-serializable for persisting to `reports/` as a base-rate record.
+    """
+    records = collect_purchase_records(client, days, max_filings=max_filings)
+    clusters = find_clusters(records, min_insiders=min_insiders, window_days=window_days)
+    out_clusters = []
+    genuine = 0
+    for c in clusters:
+        a = assess_cluster_coordination(c, records, window_days=window_days)
+        if not a.is_coordinated:
+            genuine += 1
+        out_clusters.append({
+            "issuer_cik": c.issuer_cik, "issuer_name": c.issuer_name, "ticker": c.ticker,
+            "n_insiders": c.n_insiders, "window_start": c.window_start.isoformat(),
+            "window_end": c.window_end.isoformat(), "is_coordinated": a.is_coordinated,
+            "price_cv": round(a.price_cv, 5), "span_days": a.span_days,
+        })
+    return {
+        "params": {"days": [d.isoformat() for d in days], "min_insiders": min_insiders,
+                   "window_days": window_days, "max_filings": max_filings},
+        "n_purchase_records": len(records),
+        "n_raw_clusters": len(clusters),
+        "n_genuine_clusters": genuine,
+        "n_coordinated_clusters": len(clusters) - genuine,
+        "clusters": out_clusters,
+    }
+
+
 def main() -> None:
+    import json
+
     import config
     from data.edgar import EdgarClient
 
@@ -212,27 +244,30 @@ def main() -> None:
     ap.add_argument("--min-insiders", type=int, default=3)
     ap.add_argument("--window", type=int, default=15, help="cluster window in days (filing date)")
     ap.add_argument("--max-filings", type=int, default=None, help="cap filings fetched (politeness)")
+    ap.add_argument("--out", type=str, default=None, help="write results JSON to this path")
     args = ap.parse_args()
 
     client = EdgarClient(user_agent=config.EDGAR_USER_AGENT)
     days = _trading_days_back(args.days)
     print(f"Scanning {days[0]}..{days[-1]} (filing-date windows; HARD RULE 1)")
-    records = collect_purchase_records(client, days, max_filings=args.max_filings)
-    print(f"Collected {len(records)} insider open-market-purchase records.")
-    clusters = find_clusters(records, min_insiders=args.min_insiders, window_days=args.window)
-    print(f"\n=== {len(clusters)} candidate cluster(s) "
+    result = scan(client, days, min_insiders=args.min_insiders,
+                  window_days=args.window, max_filings=args.max_filings)
+    print(f"Collected {result['n_purchase_records']} insider open-market-purchase records.")
+    print(f"\n=== {result['n_raw_clusters']} candidate cluster(s) "
           f"(>= {args.min_insiders} insiders / {args.window}d) ===")
-    genuine = 0
-    for c in clusters:
-        a = assess_cluster_coordination(c, records, window_days=args.window)
-        tag = "COORDINATED" if a.is_coordinated else "genuine?  "
-        if not a.is_coordinated:
-            genuine += 1
-        print(f"  [{tag}] {c.ticker or '?':6} {c.issuer_name[:34]:34} "
-              f"{c.n_insiders} insiders  cv={a.price_cv:.4f} span={a.span_days}d  "
-              f"{c.window_start}..{c.window_end}")
-    print(f"\n{genuine} of {len(clusters)} clusters look genuinely opportunistic "
-          f"(coordinated events excluded per D-0013/D-0015).")
+    for c in result["clusters"]:
+        tag = "COORDINATED" if c["is_coordinated"] else "genuine?  "
+        print(f"  [{tag}] {c['ticker'] or '?':6} {c['issuer_name'][:34]:34} "
+              f"{c['n_insiders']} insiders  cv={c['price_cv']:.4f} span={c['span_days']}d  "
+              f"{c['window_start']}..{c['window_end']}")
+    print(f"\n{result['n_genuine_clusters']} of {result['n_raw_clusters']} clusters look genuinely "
+          f"opportunistic (coordinated events excluded per D-0013/D-0015).")
+
+    if args.out:
+        config.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(args.out, "w") as fh:
+            json.dump(result, fh, indent=2)
+        print(f"\nWrote results to {args.out}")
 
 
 if __name__ == "__main__":
