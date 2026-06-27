@@ -5,25 +5,29 @@
 
 ---
 
-## NEXT: prototype price adapter (fenced) → event-driven backtest skeleton (plumbing only)
+## NEXT: analysis/ metrics + end-to-end pipeline integration test (all offline)
 
-Swappable signal module is done & validated (D-0019; LOVE entry 2026-06-23, look-ahead-correct).
-Next:
+Backtest engine done & tested (D-0020): costs/tax/filing-date/delisting all covered, signal-
+agnostic. Pipeline now has signal → engine; missing the metrics layer and a price source. Next
+(all offline/testable):
 
-1. **Prototype `PriceSource` adapter (fenced, free).** Per D-0018(b): a yfinance (or stooq)
-   adapter implementing `data.prices.PriceSource`, in a clearly PROTOTYPE-ONLY module, survivor-
-   biased, never the trusted/holdout result. Lets the backtest be developed against real-ish data.
-   Must NOT be importable from the trusted backtest path (D-0010).
-2. **Stage 3 backtest skeleton** in `backtest/`: consume `SignalEvent`s, enter at `entry_date`
-   (filing date), model commissions + spread/slippage + short-term cap-gains tax, support holding
-   periods 21/63/126/252d, use `PriceSource.holding_period_return` (delisting-safe). Compare vs
-   SPY. Run on PROTOTYPE prices as a PLUMBING check only — print results with a loud
-   "PROTOTYPE/survivor-biased — not a conclusion" banner. Apply kill condition ONLY later on
-   delisting-aware data.
+1. **`analysis/metrics.py`** operating on `BacktestResult`/a returns series: CAGR, Sharpe, max
+   drawdown, hit rate, and vs-SPY abnormal stats. Use quantstats where sensible, but hand-roll the
+   core stats so they're unit-tested deterministically. Flag implausible values (Sharpe>2 etc.,
+   HARD RULE 6).
+2. **End-to-end integration test**: `generate_signals` → `run_backtest` → metrics on synthetic
+   `InMemoryPriceSource` data, proving the whole pipeline composes (signal-agnostic contract).
+3. **Then (when a price source exists):** fenced yfinance/stooq prototype adapter for a PLUMBING-
+   only real-ish run (loud survivor-biased banner; not a conclusion). Trusted run still needs the
+   delisting-aware vendor.
 
-⚠️ Still needs a human (real-world, not code): a delisting-aware price VENDOR for any TRUSTED
-result (D-0018b). A multi-YEAR base-rate scan is wanted for statistical power but is heavy (env
-kills long background jobs; run in bounded chunks). Neither blocks the above.
+⚠️ Still needs a human (real-world, not code): delisting-aware price VENDOR for any TRUSTED result
+(D-0018b). Multi-YEAR base-rate scan wanted for statistical power but heavy (run in bounded chunks).
+Neither blocks the above.
+
+LOOP DRIVER: durable cron `02479140` (every 5 min, `<<autonomous-loop>>`) is now the resilient
+loop driver (added after the self-reschedule chain proved fragile). Auto-expires in 7 days — re-arm
+before then. Do NOT also keep a ScheduleWakeup chain running (avoids duplicate overlapping turns).
 
 ---
 
@@ -54,6 +58,25 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-26 — Stage 3a (event-driven backtest engine)
+NEXT: analysis/metrics.py + end-to-end integration test (offline); price source later (see top).
+DID: Built `backtest/engine.py` — `CostModel` (commission+half-spread+slippage both sides, short-
+     term tax on net gains only), `run_backtest` (filing-date entry via event.entry_date, returns
+     via delisting-safe `PriceSource.holding_period_return`, SPY-relative abnormal return),
+     `BacktestResult` summary metrics, and `run_multi_horizon` (21/63/126/252d). Signal-agnostic
+     (duck-typed events; no insider import). 14 tests vs `InMemoryPriceSource` cover cost/tax math,
+     filing-date entry, a delisted-name loss, skip-on-missing-price, summaries. Logged D-0020.
+     Deferred the yfinance prototype adapter (engine is better validated offline; real source still
+     needed for trusted results). Converged the loop onto durable cron `02479140` (no more
+     ScheduleWakeup chain → no duplicate turns).
+RESULTS: 72/72 tests green.
+RED FLAGS / REVIEW NEEDED: (carried) delisting-aware vendor for trusted results; multi-year scan
+     for power. Engine intentionally not yet run on real data (no trusted source) — so NO results
+     to over-trust yet.
+RULE CHECK: look-ahead [ok — entry at event.entry_date=filing date; tested] | survivorship [ok —
+     returns via delisting-safe primitive; delisted-loss test] | costs modeled [y — commission,
+     spread, slippage, short-term tax]
 
 ## 2026-06-26 — Stage 2d (swappable signal module, look-ahead-correct trigger)
 NEXT: Fenced prototype price adapter → Stage 3 backtest skeleton (plumbing only) (see top).

@@ -202,3 +202,17 @@ information from before the cluster was disclosable (HARD RULE 1). Coordinated c
 default (D-0015); joint owners assumed collapsed upstream (D-0016). Validated on the real LOVE
 cluster: entry_date = 2026-06-23 (3rd insider's filing), not 2026-06-22. 7 unit tests pin the
 trigger-date logic, window boundaries, coordination exclusion, dedup, and date-range filtering.
+
+### D-0020 · 2026-06-26 · Event-driven backtest engine built & tested against InMemoryPriceSource
+**Reason:** Stage 3 core. Chose to build the engine against the offline `InMemoryPriceSource`
+rather than first wiring a yfinance prototype adapter — the engine logic (costs, tax, filing-date
+entry, delisting handling) is the high-value, bug-prone part and is now fully deterministic and
+unit-tested without depending on a possibly-blocked, survivor-biased external feed. `CostModel`
+charges commission + half-spread + slippage on BOTH sides and short-term tax on net gains only
+(conservative; punitive microcap defaults, HARD RULE 3). `run_backtest` enters at `event.entry_date`
+(filing date, HARD RULE 1) and gets returns from `PriceSource.holding_period_return` (delisting-
+safe, HARD RULE 2). The engine is signal-agnostic (duck-typed events; never imports the insider
+module) and places no orders (HARD RULE 7). 14 tests pin cost/tax math, filing-date entry, a
+delisted-name loss, skip-on-missing-price, and summary metrics. The yfinance prototype adapter is
+deferred — only needed to run on real-ish prices, and a delisting-aware source is required for any
+TRUSTED result anyway (D-0010/D-0018b).
