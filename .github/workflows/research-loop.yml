@@ -1,0 +1,89 @@
+# Durable autonomous research loop.
+#
+# WHY THIS EXISTS: in-session schedulers (cron/ScheduleWakeup inside a Claude Code session) die
+# when the ephemeral container is reclaimed, so the loop stops whenever the session goes idle.
+# GitHub Actions runs on GitHub's infrastructure, independent of any session, so a scheduled
+# workflow keeps the loop alive across reclamation. Each run is one LOOP-PROTOCOL iteration; the
+# loop's memory lives in PROGRESS.md (CLAUDE.md §5), so a fresh checkout each run is fine.
+#
+# ── ONE-TIME SETUP (only you can do this) ────────────────────────────────────────────────────
+#   1. Add a repo secret named ANTHROPIC_API_KEY  (Settings → Secrets and variables → Actions).
+#   2. Settings → Actions → General → Workflow permissions → enable "Read and write permissions"
+#      so the job can push commits.
+#   3. (Optional) Adjust the cron cadence below. Every run consumes API tokens, so pick a sane
+#      interval — default is every 6 hours.
+#   4. Enable the workflow (Actions tab) and/or trigger a first run via "Run workflow".
+# Until the secret exists the job will fail fast at the auth step — it does nothing harmful.
+#
+# SAFETY: operates ONLY on the feature branch; commits carry [skip ci] so it can't trigger itself;
+# the loop is bound by CLAUDE.md's HARD RULES (no live trading, paper only).
+
+name: research-loop
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # every 6 hours, off-minute to avoid the :00 fleet pile-up
+  workflow_dispatch: {}        # allow manual "Run workflow"
+
+concurrency:
+  group: research-loop          # never run two iterations at once (avoid racing commits)
+  cancel-in-progress: false
+
+jobs:
+  iterate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: claude/loop-begin-ar03st
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run test suite (gate before any change)
+        run: python -m pytest -q
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run one loop iteration
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EDGAR_CONTACT: ${{ secrets.EDGAR_CONTACT }}   # optional; SEC fair-access contact
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set — see setup notes in this workflow file."
+            exit 1
+          fi
+          # Headless, non-interactive single iteration. The prompt does the work + updates docs;
+          # this workflow handles the commit/push so the agent needs no git credentials.
+          # NOTE: verify these flags against your installed CLI version if it errors.
+          claude -p "Continue per CLAUDE.md LOOP PROTOCOL. Read PROGRESS.md and DECISIONS.md, do exactly ONE highest-value next task in small testable pieces, run pytest, then update PROGRESS.md and DECISIONS.md. Do NOT git commit or push (CI handles that). Honor every HARD RULE; if you hit the kill condition or an implausible result, STOP and write a REVIEW NEEDED note instead of optimizing around it." \
+            --permission-mode acceptEdits \
+            --allowedTools "Bash,Edit,Write,Read,Glob,Grep" \
+          || echo "::warning::claude iteration exited non-zero; committing any partial progress."
+
+      - name: Re-run tests after changes
+        run: python -m pytest -q
+
+      - name: Commit & push if anything changed
+        run: |
+          git config user.name "research-loop[bot]"
+          git config user.email "noreply@anthropic.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes this iteration."
+          else
+            git commit -m "loop: autonomous iteration [skip ci]"
+            git push origin claude/loop-begin-ar03st
+          fi
