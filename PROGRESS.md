@@ -54,6 +54,18 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 
 ## Cycle log
 
+## 2026-06-28 — Stage 3f (skeptic-facing findings write-up)
+NEXT: Unchanged — awaiting human inputs (delisting-aware price vendor; Actions secret). Offline
+     pipeline complete; idling to avoid churn.
+DID: Wrote `docs/FINDINGS.md` (CLAUDE.md §7 criterion 5: a findings note built to be attacked) —
+     hypothesis/kill condition, what's built+tested, the 3 empirical findings (code-P offerings,
+     joint-filer inflation, ~20% genuine base rate + LOVE), threats to validity, and why there is
+     deliberately NO strategy result without delisting-aware data. Linked from README. 95/95 green.
+RESULTS: 95/95 tests green. No strategy numbers — by design.
+RED FLAGS / REVIEW NEEDED: Still blocked on the two human inputs. This was an idle-tick deliverable
+     (an explicitly-wanted writeup), not new scope; next idle ticks will scale back per loop policy.
+RULE CHECK: look-ahead [ok] | survivorship [ok] | costs modeled [y]
+
 ## 2026-06-28 — Stage 3e (end-to-end research orchestration) — OFFLINE PIPELINE COMPLETE
 NEXT: Awaiting human inputs — delisting-aware price vendor (for trusted results) and the Actions
      secret (for the durable loop). Offline pipeline is done; avoid low-value churn.

@@ -6,7 +6,9 @@ buy-and-hold **after costs, slippage, and taxes**.
 
 This is a hobby/learning project. The agent brief and operating rules live in
 [`CLAUDE.md`](./CLAUDE.md); current state lives in [`PROGRESS.md`](./PROGRESS.md); design
-choices and their rationale live in [`DECISIONS.md`](./DECISIONS.md).
+choices and their rationale live in [`DECISIONS.md`](./DECISIONS.md). A skeptic-facing write-up of
+method and findings so far is in [`docs/FINDINGS.md`](./docs/FINDINGS.md), and how to run the loop
+durably in [`docs/AUTONOMOUS_LOOP.md`](./docs/AUTONOMOUS_LOOP.md).
 
 ## What it does (and the order it's built in)
 
