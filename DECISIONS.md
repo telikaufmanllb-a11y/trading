@@ -237,3 +237,14 @@ is not possible inside this container — it will work on the GitHub Actions run
 normal machine. The adapter and its mapping are committed and tested regardless; this is purely an
 environment networking limit, not a code defect. A trusted run still requires a delisting-aware
 source anyway.
+
+### D-0023 · 2026-06-28 · Train/holdout splitter + honest markdown report writer
+**Reason:** Stage 3 finish-line infrastructure, buildable offline before real data lands.
+`backtest/split.py` does CHRONOLOGICAL train/holdout splits by filing date (never random — that
+leaks the future; HARD RULE 4) with a fraction helper; the "validate holdout only once" rule stays
+a logged process commitment. `analysis/report.py` renders a markdown tearsheet that (a) surfaces
+the `compute_metrics` implausibility warnings at the TOP (HARD RULE 6), (b) always includes the
+non-financial-advice disclaimer (HARD RULE 8/§10), (c) loudly flags PROTOTYPE/survivor-biased data,
+and (d) gives a cautious verdict that returns "Inconclusive" for <30 trades and states the kill-
+condition reading ("no edge") when nothing beats SPY — never manufacturing an edge from thin or
+in-sample data. 10 new tests; 91/91 green.

@@ -55,6 +55,20 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 
 ## Cycle log
 
+## 2026-06-28 — Stage 3d (train/holdout split + report writer)
+NEXT: end-to-end research orchestration script (cached EDGAR signals → multi-horizon backtest →
+     report), offline-testable with InMemoryPriceSource. After that, blocked on real price data
+     (vendor=human) and the Actions secret for durable runs.
+DID: Built `backtest/split.py` (chronological train/holdout by filing date, HARD RULE 4) and
+     `analysis/report.py` (markdown tearsheet: warnings-first, disclaimer always, PROTOTYPE-data
+     banner, cautious verdict that says "Inconclusive"/"no edge" rather than inventing an edge).
+     10 tests; 91/91 green. Logged D-0023.
+RESULTS: 91/91 tests green. No strategy numbers (no real price data) — by design.
+RED FLAGS / REVIEW NEEDED: (carried, both human) delisting-aware price VENDOR for trusted results;
+     add ANTHROPIC_API_KEY secret to enable the durable GitHub Actions loop. No code defects open.
+RULE CHECK: look-ahead [ok — chronological split, no random leakage] | survivorship [ok] |
+     costs modeled [y]
+
 ## 2026-06-28 — Stage 3c (fenced prototype price adapter)
 NEXT: train/holdout splitter + tearsheet writer (offline-buildable); real price data is the
      blocker for actual results (vendor = human; yfinance blocked in-container, D-0022).
