@@ -10,11 +10,15 @@
 The full offline stack is built & tested (data→signal→backtest→metrics, 81 tests). Two things gate
 further progress:
 
-1. **Price data.** Trusted result needs a delisting-aware VENDOR (human decision, D-0018b). For a
-   PLUMBING-only real-ish run, add a fenced yfinance/stooq `PriceSource` adapter (loud survivor-
-   biased banner; never a conclusion; not importable from the trusted path, D-0010).
+1. **Price data (the real blocker).** Fenced yfinance adapter is BUILT & tested
+   (data/prices_prototype.py) but can't fetch in THIS container (curl_cffi vs. the egress proxy,
+   D-0022) — it will work on the GitHub Actions runner / a normal machine. A TRUSTED result still
+   needs a delisting-aware VENDOR (human decision, D-0018b).
 2. **Train/holdout split + kill-condition harness** (Stage 3 finish): once real data exists, split
    train vs. holdout, run multi-horizon vs SPY, apply the pre-committed kill condition ONCE.
+3. **Offline-buildable now:** a train/holdout splitter + a `reports/` tearsheet writer that work
+   against any PriceSource, so the moment real data lands the analysis is ready. Test on
+   InMemoryPriceSource.
 
 ⚠️ **LOOP DURABILITY (open):** in-session cron/ScheduleWakeup do NOT survive the ephemeral
 container being reclaimed (~18h outage observed). A durable driver must live on OUTSIDE infra —
@@ -50,6 +54,23 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-28 — Stage 3c (fenced prototype price adapter)
+NEXT: train/holdout splitter + tearsheet writer (offline-buildable); real price data is the
+     blocker for actual results (vendor = human; yfinance blocked in-container, D-0022).
+DID: Built `data/prices_prototype.YFinancePriceSource` (fenced, survivor-biased, delisting()=None,
+     loud warning) implementing the swappable `PriceSource`, with a pure unit-tested `to_price_frame`
+     column mapper (flat/MultiIndex/auto_adjust). 4 new tests; 85/85 green. Tried a live fetch:
+     yfinance's curl_cffi TLS can't negotiate through this container's egress proxy (D-0022) — not
+     fixable without disabling TLS (forbidden), so no in-container live run; adapter will work on the
+     GH Actions runner. Loop durability handled last cycle via .github/workflows/research-loop.yml
+     (awaiting the user's ANTHROPIC_API_KEY secret).
+RESULTS: 85/85 tests green. Still NO strategy results (no usable real price data) — nothing to
+     over-trust, by design.
+RED FLAGS / REVIEW NEEDED: (carried) delisting-aware price VENDOR for trusted results; loop
+     durability needs the user to add the Actions secret. No code defects open.
+RULE CHECK: look-ahead [ok] | survivorship [ok — prototype is fenced & clearly survivor-biased] |
+     costs modeled [y, in engine]
 
 ## 2026-06-28 — Stage 3b (analysis/metrics + end-to-end integration; loop durability)
 NEXT: A real price source to actually RUN the pipeline. Trusted result needs the delisting-aware

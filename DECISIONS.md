@@ -224,3 +224,16 @@ emits WARNINGS for implausible results — per-trade Sharpe>2, >500% compounded,
 near-zero drawdown with many trades — operationalizing HARD RULE 6 (a great number is a bug to
 investigate first). End-to-end integration test (signal→backtest→metrics on synthetic data) proves
 the signal-agnostic contract composes. 9 new tests; 81/81 green.
+
+### D-0022 · 2026-06-28 · Prototype yfinance PriceSource built; live fetch blocked in THIS container
+**Reason:** Built `data/prices_prototype.YFinancePriceSource` (fenced, survivor-biased; `delisting()`
+always None; loud warning) with a pure, unit-tested `to_price_frame` column mapper (flat +
+MultiIndex + auto_adjust cases). Implements the swappable `PriceSource` so the backtest can run on
+real-ish prices for PLUMBING only — never trusted results (D-0010/D-0018b). **Limitation found:**
+yfinance uses `curl_cffi` (TLS impersonation) which cannot negotiate through this environment's
+re-terminating egress proxy (BoringSSL "invalid library" error); setting CURL_CA_BUNDLE/SSL_CERT_FILE
+did not help, and per the proxy README we must NOT disable TLS verification. So a live prototype run
+is not possible inside this container — it will work on the GitHub Actions runner (no proxy) or any
+normal machine. The adapter and its mapping are committed and tested regardless; this is purely an
+environment networking limit, not a code defect. A trusted run still requires a delisting-aware
+source anyway.
