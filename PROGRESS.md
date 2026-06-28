@@ -5,25 +5,24 @@
 
 ---
 
-## NEXT: a real price source to RUN the pipeline; + durable out-of-session loop driver
+## NEXT: (offline pipeline COMPLETE) — awaiting human inputs to go further
 
-The full offline stack is built & tested (data→signal→backtest→metrics, 81 tests). Two things gate
-further progress:
+The full offline pipeline is built & tested end-to-end (95 tests): EDGAR ingest → cluster signal
+(look-ahead-correct, opportunistic-filtered) → event-driven backtest (costs/tax/delisting) →
+metrics (with implausibility warnings) → train/holdout split → markdown report → one-command
+orchestration (`scripts/run_research.py`). There is intentionally NO strategy result yet, because
+there is no trustworthy price data — and that is the honest state, not a gap to paper over.
 
-1. **Price data (the real blocker).** Fenced yfinance adapter is BUILT & tested
-   (data/prices_prototype.py) but can't fetch in THIS container (curl_cffi vs. the egress proxy,
-   D-0022) — it will work on the GitHub Actions runner / a normal machine. A TRUSTED result still
-   needs a delisting-aware VENDOR (human decision, D-0018b).
-2. **Train/holdout split + kill-condition harness** (Stage 3 finish): once real data exists, split
-   train vs. holdout, run multi-horizon vs SPY, apply the pre-committed kill condition ONCE.
-3. **Offline-buildable now:** a train/holdout splitter + a `reports/` tearsheet writer that work
-   against any PriceSource, so the moment real data lands the analysis is ready. Test on
-   InMemoryPriceSource.
+**Two blockers, both genuinely human (logged, not code):**
+1. **Delisting-aware price VENDOR** (HARD RULE 2; D-0010/D-0018b) — required for ANY trusted
+   result. yfinance prototype is built but survivor-biased AND blocked by this container's proxy
+   (D-0022); it would run on the GH Actions runner for PLUMBING only, never a conclusion.
+2. **Durable loop:** add the `ANTHROPIC_API_KEY` repo secret + enable Actions write perms so
+   `.github/workflows/research-loop.yml` can run unattended (docs/AUTONOMOUS_LOOP.md).
 
-⚠️ **LOOP DURABILITY (open):** in-session cron/ScheduleWakeup do NOT survive the ephemeral
-container being reclaimed (~18h outage observed). A durable driver must live on OUTSIDE infra —
-GitHub Actions scheduled workflow, or a Claude Code web scheduled trigger. Proposed to the user;
-awaiting a decision. In-session cron `ac1d9a62` re-armed meanwhile (dies on next reclamation).
+**Safe offline things a future tick COULD do (low marginal value — avoid churn):** a project-state
+writeup in reports/; more features (role/cluster-size weighting) — but per §9 do NOT add complexity
+before the simple version is validated on real data. Prefer to WAIT for the human inputs above.
 
 ---
 
@@ -54,6 +53,19 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-28 — Stage 3e (end-to-end research orchestration) — OFFLINE PIPELINE COMPLETE
+NEXT: Awaiting human inputs — delisting-aware price vendor (for trusted results) and the Actions
+     secret (for the durable loop). Offline pipeline is done; avoid low-value churn.
+DID: Built `scripts/run_research.py` (EDGAR→signals→multi-horizon backtest→report; pure
+     `run_research` core + CLI that refuses to run without a trusted price source, fenced prototype
+     behind --prototype-prices; train/holdout reserves the holdout). 4 tests; 95/95 green. Logged
+     D-0024. This completes the offline-buildable stack.
+RESULTS: 95/95 tests green. No strategy numbers — by design (no trustworthy price data).
+RED FLAGS / REVIEW NEEDED: Project is now genuinely BLOCKED on two human inputs (price vendor;
+     Actions secret). Continuing to add code would risk complexity-before-validation (§9). The loop
+     will idle/scale back until those land.
+RULE CHECK: look-ahead [ok] | survivorship [ok] | costs modeled [y]
 
 ## 2026-06-28 — Stage 3d (train/holdout split + report writer)
 NEXT: end-to-end research orchestration script (cached EDGAR signals → multi-horizon backtest →

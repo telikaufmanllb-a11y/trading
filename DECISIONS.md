@@ -248,3 +248,14 @@ non-financial-advice disclaimer (HARD RULE 8/§10), (c) loudly flags PROTOTYPE/s
 and (d) gives a cautious verdict that returns "Inconclusive" for <30 trades and states the kill-
 condition reading ("no edge") when nothing beats SPY — never manufacturing an edge from thin or
 in-sample data. 10 new tests; 91/91 green.
+
+### D-0024 · 2026-06-28 · End-to-end research orchestration (scripts/run_research.py)
+**Reason:** Ties the pipeline together: EDGAR cluster buys → `generate_signals` → multi-horizon
+backtest → markdown report. Core `run_research(buys, price_source, …)` is pure and unit-tested
+offline (InMemoryPriceSource); `main()` wires real EDGAR signals + a chosen price source and
+REFUSES to run without one (no trusted source ⇒ exits with guidance), only allowing the fenced
+prototype via an explicit `--prototype-prices` flag that stamps the report PROTOTYPE/not-a-
+conclusion. Train/holdout: with `--train-fraction`, only TRAIN is scored and the holdout is
+reserved+counted (validate once, HARD RULE 4). 4 tests; 95/95 green. **This completes the offline-
+buildable pipeline** — further progress needs a real (delisting-aware) price source, which is a
+human procurement decision.
