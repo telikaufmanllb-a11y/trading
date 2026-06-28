@@ -77,10 +77,16 @@ def run_research(
 def main() -> None:
     import config
     from data.edgar import EdgarClient
-    from scripts.eyeball_clusters import _trading_days_back, collect_purchase_records
+    from scripts.eyeball_clusters import (
+        _trading_days_back,
+        collect_purchase_records,
+        trading_days_between,
+    )
 
     ap = argparse.ArgumentParser(description="Run the insider cluster-buy research pipeline.")
     ap.add_argument("--days", type=int, default=5, help="recent weekdays of EDGAR filings to scan")
+    ap.add_argument("--start", type=str, default=None, help="historical scan start (YYYY-MM-DD)")
+    ap.add_argument("--end", type=str, default=None, help="historical scan end (YYYY-MM-DD)")
     ap.add_argument("--max-filings", type=int, default=None)
     ap.add_argument("--train-fraction", type=float, default=None)
     ap.add_argument("--prototype-prices", action="store_true",
@@ -99,8 +105,13 @@ def main() -> None:
     note = "PROTOTYPE / survivor-biased (yfinance) — plumbing only, NOT a conclusion"
 
     client = EdgarClient(user_agent=config.EDGAR_USER_AGENT)
-    days = _trading_days_back(args.days)
-    print(f"Scanning {days[0]}..{days[-1]} for insider open-market purchases...")
+    if args.start and args.end:
+        days = trading_days_between(date.fromisoformat(args.start), date.fromisoformat(args.end))
+        if not days:
+            raise SystemExit("empty date range")
+    else:
+        days = _trading_days_back(args.days)
+    print(f"Scanning {days[0]}..{days[-1]} ({len(days)} weekdays) for insider open-market purchases...")
     records = collect_purchase_records(client, days, max_filings=args.max_filings)
     buys = cluster_buys_from_records(records)
     print(f"{len(buys)} purchase records → generating signals + backtesting...")

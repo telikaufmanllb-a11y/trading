@@ -203,6 +203,23 @@ def _trading_days_back(n: int, end: Optional[date] = None) -> list[date]:
     return sorted(out)
 
 
+def trading_days_between(start: date, end: date) -> list[date]:
+    """All weekdays in [start, end] inclusive (weekend/holiday indices just 404 to empty).
+
+    Used for HISTORICAL scans: a backtest needs cluster signals old enough that their holding
+    periods have already elapsed, which 'recent N days' can't provide.
+    """
+    if end < start:
+        return []
+    out: list[date] = []
+    d = start
+    while d <= end:
+        if d.weekday() < 5:
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
 def scan(client, days, *, min_insiders: int, window_days: int, max_filings: Optional[int] = None) -> dict:
     """Run the full eyeball pipeline and return a results dict (counts + per-cluster detail).
 

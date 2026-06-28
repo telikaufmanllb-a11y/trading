@@ -161,3 +161,12 @@ def test_clusters_sorted_by_size_desc():
     clusters = find_clusters(recs, min_insiders=3, window_days=15)
     assert [c.n_insiders for c in clusters] == [4, 3]
     assert clusters[0].issuer_cik == "200"
+
+
+def test_trading_days_between_excludes_weekends():
+    from datetime import date
+    from scripts.eyeball_clusters import trading_days_between
+    # 2024-02-01 (Thu) .. 2024-02-05 (Mon): Thu,Fri,Mon = 3 weekdays (Sat/Sun dropped).
+    days = trading_days_between(date(2024, 2, 1), date(2024, 2, 5))
+    assert days == [date(2024, 2, 1), date(2024, 2, 2), date(2024, 2, 5)]
+    assert trading_days_between(date(2024, 2, 5), date(2024, 2, 1)) == []  # reversed -> empty

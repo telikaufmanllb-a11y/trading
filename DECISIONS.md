@@ -259,3 +259,17 @@ conclusion. Train/holdout: with `--train-fraction`, only TRAIN is scored and the
 reserved+counted (validate once, HARD RULE 4). 4 tests; 95/95 green. **This completes the offline-
 buildable pipeline** — further progress needs a real (delisting-aware) price source, which is a
 human procurement decision.
+
+### D-0025 · 2026-06-28 · Run the first real-data (PROTOTYPE) backtest on GitHub Actions, not in-container
+**Reason (best-intuition call, user-delegated):** Both free price sources are unreachable from this
+dev container — yfinance's curl_cffi can't negotiate the egress proxy (D-0022) and Stooq now serves
+a JS anti-bot page instead of CSV. The blocker is the *environment*, not the pipeline. A GitHub
+Actions runner has open network, so the stack can run on real prices there. Added
+`.github/workflows/research-run.yml` (workflow_dispatch, **no secret needed** — pure Python): scans
+a HISTORICAL EDGAR window (default 2023-02, old enough that 21–252d holds have elapsed), runs
+`scripts.run_research --prototype-prices --train-fraction 0.7`, and uploads the report as an
+artifact. Added `trading_days_between` + `--start/--end` so the scan can target historical dates
+(recent-N-days can't backtest — nothing has elapsed). This produces the project's FIRST end-to-end
+real-data result the moment the user enables Actions — but it is PROTOTYPE/survivor-biased, loudly
+stamped, and the kill condition is NOT evaluated on it (a delisting-aware vendor is still required
+for any trusted conclusion). 1 new test; 96/96 green.

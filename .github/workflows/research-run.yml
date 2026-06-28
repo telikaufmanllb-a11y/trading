@@ -1,0 +1,65 @@
+# First real-data (PROTOTYPE) research run — produces an actual backtest report.
+#
+# WHY: the dev container's network blocks every free price source (yfinance TLS, Stooq JS-gate),
+# so the pipeline can't run on real prices there. A GitHub Actions runner has open network, so
+# yfinance works and the whole stack can run end-to-end. This workflow does exactly that and
+# uploads the report as an artifact.
+#
+# IMPORTANT — this is PROTOTYPE output, NOT a conclusion:
+#   * yfinance is SURVIVOR-BIASED (drops delisted names) → violates HARD RULE 2 for trusted use.
+#   * The report is stamped accordingly and the kill condition is NOT evaluated on it.
+#   * A trusted result still requires a delisting-aware price vendor (your decision).
+#
+# Needs NO secret — it is pure Python (no Claude/API). Just enable Actions and click "Run workflow".
+# Defaults scan a historical window old enough that 21–252d holding periods have elapsed.
+
+name: research-run
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "EDGAR scan start (YYYY-MM-DD)"
+        default: "2023-02-01"
+      end:
+        description: "EDGAR scan end (YYYY-MM-DD)"
+        default: "2023-02-28"
+      edgar_contact:
+        description: "Contact email for SEC fair-access User-Agent"
+        default: "research@example.com"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/loop-begin-ar03st
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - run: python -m pytest -q
+
+      - name: Run research pipeline on real (PROTOTYPE) prices
+        env:
+          EDGAR_CONTACT: ${{ github.event.inputs.edgar_contact }}
+        run: |
+          python -m scripts.run_research \
+            --start "${{ github.event.inputs.start }}" \
+            --end "${{ github.event.inputs.end }}" \
+            --prototype-prices \
+            --train-fraction 0.7 \
+            --out research_report.md
+          echo "----- REPORT -----"
+          cat research_report.md
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-report
+          path: research_report.md

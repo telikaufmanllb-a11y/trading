@@ -10,8 +10,8 @@
 The full offline pipeline is built & tested end-to-end (95 tests): EDGAR ingest → cluster signal
 (look-ahead-correct, opportunistic-filtered) → event-driven backtest (costs/tax/delisting) →
 metrics (with implausibility warnings) → train/holdout split → markdown report → one-command
-orchestration (`scripts/run_research.py`). There is intentionally NO strategy result yet, because
-there is no trustworthy price data — and that is the honest state, not a gap to paper over.
+orchestration (`scripts/run_research.py`). There is no TRUSTED strategy result (needs a delisting-aware vendor), but a FIRST real-data
+PROTOTYPE run is now possible with zero new inputs — see below.
 
 **Two blockers, both genuinely human (logged, not code):**
 1. **Delisting-aware price VENDOR** (HARD RULE 2; D-0010/D-0018b) — required for ANY trusted
@@ -53,6 +53,23 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 ---
 
 ## Cycle log
+
+## 2026-06-28 — Stage 3g (env-data unblock: real-data run on GitHub Actions)
+NEXT: User action to get a result: open the repo Actions tab → run **research-run** (no secret
+     needed) to produce the first real-data PROTOTYPE backtest report (artifact). For a TRUSTED
+     result, still need a delisting-aware price vendor. For the durable dev loop, still need the
+     ANTHROPIC_API_KEY secret.
+DID: Diagnosed that BOTH free price sources are blocked in-container (yfinance curl_cffi vs proxy;
+     Stooq JS anti-bot). Best-intuition pivot (user-delegated): run the pipeline where the network
+     works. Added `.github/workflows/research-run.yml` (workflow_dispatch, NO secret, pure Python)
+     that scans a historical EDGAR window + runs `run_research --prototype-prices` + uploads the
+     report. Added `trading_days_between` and `--start/--end` historical scanning. D-0025. 96/96 green.
+RESULTS: 96/96 tests green. Still no in-container result (env network blocks all free price data);
+     first real-data PROTOTYPE result is one click away on the Actions runner.
+RED FLAGS / REVIEW NEEDED: Trusted result still needs a delisting-aware vendor; durable loop still
+     needs the Actions secret. The research-run workflow needs neither — just enable Actions.
+RULE CHECK: look-ahead [ok] | survivorship [ok — prototype run is loudly fenced; no kill-condition
+     conclusion drawn on it] | costs modeled [y]
 
 ## 2026-06-28 — Stage 3f (skeptic-facing findings write-up)
 NEXT: Unchanged — awaiting human inputs (delisting-aware price vendor; Actions secret). Offline
