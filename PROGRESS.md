@@ -5,29 +5,21 @@
 
 ---
 
-## NEXT: analysis/ metrics + end-to-end pipeline integration test (all offline)
+## NEXT: a real price source to RUN the pipeline; + durable out-of-session loop driver
 
-Backtest engine done & tested (D-0020): costs/tax/filing-date/delisting all covered, signal-
-agnostic. Pipeline now has signal → engine; missing the metrics layer and a price source. Next
-(all offline/testable):
+The full offline stack is built & tested (data→signal→backtest→metrics, 81 tests). Two things gate
+further progress:
 
-1. **`analysis/metrics.py`** operating on `BacktestResult`/a returns series: CAGR, Sharpe, max
-   drawdown, hit rate, and vs-SPY abnormal stats. Use quantstats where sensible, but hand-roll the
-   core stats so they're unit-tested deterministically. Flag implausible values (Sharpe>2 etc.,
-   HARD RULE 6).
-2. **End-to-end integration test**: `generate_signals` → `run_backtest` → metrics on synthetic
-   `InMemoryPriceSource` data, proving the whole pipeline composes (signal-agnostic contract).
-3. **Then (when a price source exists):** fenced yfinance/stooq prototype adapter for a PLUMBING-
-   only real-ish run (loud survivor-biased banner; not a conclusion). Trusted run still needs the
-   delisting-aware vendor.
+1. **Price data.** Trusted result needs a delisting-aware VENDOR (human decision, D-0018b). For a
+   PLUMBING-only real-ish run, add a fenced yfinance/stooq `PriceSource` adapter (loud survivor-
+   biased banner; never a conclusion; not importable from the trusted path, D-0010).
+2. **Train/holdout split + kill-condition harness** (Stage 3 finish): once real data exists, split
+   train vs. holdout, run multi-horizon vs SPY, apply the pre-committed kill condition ONCE.
 
-⚠️ Still needs a human (real-world, not code): delisting-aware price VENDOR for any TRUSTED result
-(D-0018b). Multi-YEAR base-rate scan wanted for statistical power but heavy (run in bounded chunks).
-Neither blocks the above.
-
-LOOP DRIVER: durable cron `02479140` (every 5 min, `<<autonomous-loop>>`) is now the resilient
-loop driver (added after the self-reschedule chain proved fragile). Auto-expires in 7 days — re-arm
-before then. Do NOT also keep a ScheduleWakeup chain running (avoids duplicate overlapping turns).
+⚠️ **LOOP DURABILITY (open):** in-session cron/ScheduleWakeup do NOT survive the ephemeral
+container being reclaimed (~18h outage observed). A durable driver must live on OUTSIDE infra —
+GitHub Actions scheduled workflow, or a Claude Code web scheduled trigger. Proposed to the user;
+awaiting a decision. In-session cron `ac1d9a62` re-armed meanwhile (dies on next reclamation).
 
 ---
 
@@ -48,16 +40,34 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 
 | Stage | Description | Status |
 |-------|-------------|--------|
-| 0 | Frame: docs, repo skeleton, deps | ✅ done (this cycle) |
-| 1 | EDGAR Form 4 ingest + point-in-time prices/universe + eyeball clusters | 🟡 in progress |
-| 2 | Cluster-buy detector + features | ⬜ not started |
-| 3 | Event-driven backtest (filing-date entries, costs, train/holdout, kill condition) | ⬜ not started |
+| 0 | Frame: docs, repo skeleton, deps | ✅ done |
+| 1 | EDGAR Form 4 ingest + eyeball clusters | ✅ ingest+eyeball done; ⬜ delisting-aware prices/universe (needs vendor) |
+| 2 | Cluster-buy detector + opportunistic filter | ✅ done (signals/insider_cluster + features/opportunistic) |
+| 3 | Event-driven backtest (filing-date, costs) | 🟡 engine+metrics done & tested; ⬜ train/holdout + kill condition (needs real prices) |
 | 4 | Paper trade (NO live orders) | ⬜ not started |
 | 5 | Generalize: congressional-trade module | ⬜ not started |
 
 ---
 
 ## Cycle log
+
+## 2026-06-28 — Stage 3b (analysis/metrics + end-to-end integration; loop durability)
+NEXT: A real price source to actually RUN the pipeline. Trusted result needs the delisting-aware
+     vendor (human, D-0018b); a fenced yfinance prototype can do a PLUMBING-only real-ish run.
+     Also: durable out-of-session loop driver (see below) — current in-session cron dies on
+     container reclamation.
+DID: Built `analysis/metrics.py` (compound/Sharpe/max-drawdown/t-stat + implausibility WARNINGS,
+     HARD RULE 6) and an end-to-end integration test (generate_signals → run_backtest →
+     compute_metrics on synthetic data). Fixed a test-fixture date bug (exit bar fell 1 day past
+     the holding window — engine was correct). 81/81 green. Re-armed in-session cron after the
+     prior one died with the reclaimed container.
+RESULTS: 81/81 tests green. No strategy results yet (no real price data — by design, nothing to
+     over-trust).
+RED FLAGS / REVIEW NEEDED: **Loop durability** — in-session cron/ScheduleWakeup do NOT survive the
+     ephemeral container being reclaimed (~18h gap observed). A durable driver must live on outside
+     infra (GitHub Actions scheduled workflow, or a Claude Code web scheduled trigger). Proposed to
+     the user. (carried) price vendor; multi-year scan.
+RULE CHECK: look-ahead [ok] | survivorship [ok] | costs modeled [y]
 
 ## 2026-06-26 — Stage 3a (event-driven backtest engine)
 NEXT: analysis/metrics.py + end-to-end integration test (offline); price source later (see top).

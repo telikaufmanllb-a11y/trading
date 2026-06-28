@@ -216,3 +216,11 @@ module) and places no orders (HARD RULE 7). 14 tests pin cost/tax math, filing-d
 delisted-name loss, skip-on-missing-price, and summary metrics. The yfinance prototype adapter is
 deferred — only needed to run on real-ish prices, and a delisting-aware source is required for any
 TRUSTED result anyway (D-0010/D-0018b).
+
+### D-0021 · 2026-06-28 · analysis/metrics.py with built-in implausibility warnings
+**Reason:** Stage 3 metrics. Hand-rolled CAGR/Sharpe/drawdown/hit-rate/abnormal-t-stat so they are
+deterministic and unit-tested (quantstats can layer on for plots later). Crucially, `compute_metrics`
+emits WARNINGS for implausible results — per-trade Sharpe>2, >500% compounded, <30 trades, or
+near-zero drawdown with many trades — operationalizing HARD RULE 6 (a great number is a bug to
+investigate first). End-to-end integration test (signal→backtest→metrics on synthetic data) proves
+the signal-agnostic contract composes. 9 new tests; 81/81 green.
