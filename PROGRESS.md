@@ -54,6 +54,19 @@ re-tune parameters to defeat the kill condition. (That is overfitting.)
 
 ## Cycle log
 
+## 2026-06-28 — Stage 3g-fix (make research-run completable; resolve schedule question)
+NEXT: Unchanged — user runs the **research-run** Action for the first PROTOTYPE result; trusted
+     result needs a delisting-aware vendor; durable dev loop needs the ANTHROPIC_API_KEY secret.
+DID: Caught that research-run's default month-long scan (~25k EDGAR fetches ≈ 50+ min) would blow
+     the 60-min job timeout. Fixed: default window now ~1 week, added a `max_filings` input (wired
+     to --max-filings), timeout 90 min. Resolved my own dangling question by best-judgement:
+     research-run stays MANUAL-ONLY (a scheduled prototype run would emit survivor-biased noise
+     nobody asked to consume). 96/96 green.
+RESULTS: 96/96 tests green. No new strategy numbers (still no in-container data path; runner-only).
+RED FLAGS / REVIEW NEEDED: Carried — delisting-aware vendor (trusted results); Actions secret
+     (durable loop). research-run needs neither.
+RULE CHECK: look-ahead [ok] | survivorship [ok] | costs modeled [y]
+
 ## 2026-06-28 — Stage 3g (env-data unblock: real-data run on GitHub Actions)
 NEXT: User action to get a result: open the repo Actions tab → run **research-run** (no secret
      needed) to produce the first real-data PROTOTYPE backtest report (artifact). For a TRUSTED

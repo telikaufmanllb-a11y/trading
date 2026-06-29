@@ -23,7 +23,10 @@ on:
         default: "2023-02-01"
       end:
         description: "EDGAR scan end (YYYY-MM-DD)"
-        default: "2023-02-28"
+        default: "2023-02-07"   # ~1 week (~6k filings ≈ 13 min at 8 req/s) fits the timeout
+      max_filings:
+        description: "Cap filings fetched (politeness + keep within the job timeout)"
+        default: "4000"
       edgar_contact:
         description: "Contact email for SEC fair-access User-Agent"
         default: "research@example.com"
@@ -31,7 +34,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,6 +55,7 @@ jobs:
           python -m scripts.run_research \
             --start "${{ github.event.inputs.start }}" \
             --end "${{ github.event.inputs.end }}" \
+            --max-filings "${{ github.event.inputs.max_filings }}" \
             --prototype-prices \
             --train-fraction 0.7 \
             --out research_report.md
